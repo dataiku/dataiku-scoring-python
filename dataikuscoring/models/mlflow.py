@@ -37,7 +37,7 @@ class MLflowModel(PredictionModelMixin, ProbabilisticModelMixin):
             y_pred = scoring_data.pred_and_proba_df
         elif prediction_type == "REGRESSION":
             scoring_data = mlflow_regression_predict_to_scoring_data(self.model, self.metadata, input_df)
-            y_pred = scoring_data.pred_df
+            y_pred = scoring_data.preds_df
 
         return y_pred
 

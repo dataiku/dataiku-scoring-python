@@ -69,13 +69,17 @@ def load_resources_from_resource_folder(resources_folder):
         meta = json.load(f)
 
     if "partitions" in meta:
-        return {
+        resources = {
             "meta": meta,
             "partitions": {
                 partition: load_resources_from_resource_folder(os.path.join(resources_folder, "parts", escape(partition)))
                 for partition in meta["partitions"]
             }
         }
+        # In lab models, type is missing in partitions meta.
+        for partition_data in resources["partitions"].values():
+            partition_data["meta"].setdefault("type", resources["meta"]["type"])
+        return resources
 
     with gzip.open(os.path.join(resources_folder, "dss_pipeline_model.gz"), "rb") as f:
         model_parameters = json.loads(f.read().decode("utf-8"))
@@ -160,6 +164,8 @@ def load_resources(export_path):
     inside the unzipped version, or an unzipped model.zip file"""
     resources_folder = tempfile.mkdtemp()
     tmp_dir = tempfile.mkdtemp()
+    if not os.path.isfile(export_path) and not os.path.isdir(export_path):
+        raise ValueError("export_path '{}' not found".format(export_path))
 
     try:
         if zipfile.is_zipfile(export_path):
