@@ -1,5 +1,7 @@
 import logging
 import json
+from datetime import datetime
+
 import pandas as pd
 import numpy as np
 
@@ -143,3 +145,24 @@ def mlflow_raw_predict(mlflow_model, imported_model_meta, input_df, force_json_t
 
     else:
         raise Exception("Can't handle MLflow model output: %s" % type(output))
+
+
+def convert_date_features(imported_model_meta, input_df):
+    """
+    Converts features declared in imported_model_meta as 'date' feature types to 'real' datetime64 in input_df.
+    Don't touch columns that are not declared as 'date' feature types.
+    """
+    for feature in imported_model_meta['features']:
+        if feature['type'] == 'date':
+            if pd.api.types.is_numeric_dtype(input_df[feature['name']].dtype):
+                input_df[feature['name']] = epoch_to_datetime(input_df[feature['name']], input_df[feature['name']])
+            else:
+                input_df[feature['name']] = pd.to_datetime(input_df[feature['name']])
+
+
+def epoch_to_datetime(series, orig_series):
+    if hasattr(orig_series.dtype, 'tz'):
+        epoch = datetime(1900, 1, 1, tzinfo=orig_series.dtype.tz) # expect that it's UTC
+    else:
+        epoch = datetime(1900, 1, 1)
+    return (series * np.timedelta64(1, 's')) + epoch

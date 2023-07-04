@@ -9,6 +9,10 @@ from abc import abstractmethod
 from abc import ABCMeta
 
 
+PREDICTION = "prediction"
+PROBABILITIES = "probabilities"
+
+
 @six.add_metaclass(ABCMeta)
 class AbstractPredictionResult(object):
 
@@ -35,6 +39,19 @@ class AbstractPredictionResult(object):
         :rtype: bool
         """
 
+    @abstractmethod
+    def as_dataframe(self):
+        """
+        Builds & returns a DataFrame representation of the result:
+        WARNING:
+          * This dataframe has no notion of index because it is built out of numpy arrays so will have
+            a pristine range index and MUST be indexed afterwards
+          * For classification, proba columns are returned as a tuple ("probabilities", "class_name"), which differs
+            from the usual "proba_className"
+        :return: the prediction result as a DataFrame
+        :rtype: pd.DataFrame
+        """
+
     @staticmethod
     def concat(prediction_results):
         """
@@ -52,6 +69,9 @@ class AbstractPredictionResult(object):
 
 
 class PredictionResult(AbstractPredictionResult):
+
+    def as_dataframe(self):
+        return pd.DataFrame({PREDICTION: self.preds})
 
     def __init__(self, preds):
         """
@@ -129,6 +149,15 @@ class ClassificationPredictionResult(AbstractPredictionResult):
             return self._preds.shape[0] == 0
         else:
             return self._unmapped_preds.shape[0] == 0
+
+    def as_dataframe(self):
+        preds_df = pd.DataFrame(({PREDICTION: self.preds}))
+        if not self.has_probas():
+            return preds_df
+        else:
+            columns = [(PROBABILITIES, clazz) for clazz in self._classes]
+            probas_df = pd.DataFrame(data=self.probas, columns=columns)
+            return pd.concat([preds_df, probas_df], axis=1)
 
     @staticmethod
     def _concat_items(items_list):

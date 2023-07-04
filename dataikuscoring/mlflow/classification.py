@@ -2,7 +2,7 @@ import logging
 import pandas as pd
 import numpy as np
 
-from dataikuscoring.mlflow.common import DisableMLflowTypeEnforcement
+from dataikuscoring.mlflow.common import DisableMLflowTypeEnforcement, convert_date_features
 from dataikuscoring.utils.scoring_data import ScoringData
 from dataikuscoring.utils.prediction_result import ClassificationPredictionResult
 
@@ -67,6 +67,8 @@ def mlflow_try_to_get_probas(input_df, mlflow_model, labels_map):
 
 
 def mlflow_classification_predict_to_scoring_data(mlflow_model, imported_model_meta, input_df, threshold=None):
+    input_df = input_df.copy()
+    convert_date_features(imported_model_meta, input_df)
     """
     Returns a ScoringData containing predictions and probas for a MLflow model.
     Performs "interpretation" of the MLflow output.
@@ -194,7 +196,7 @@ def mlflow_classification_predict_to_scoring_data(mlflow_model, imported_model_m
             probas_one = probas["proba_%s" % int_to_label_map[1]]
             preds = (probas_one > threshold).astype(np.int)
             pred_df = pd.DataFrame({"prediction": preds})
-            logger.info("Computed pred df %s" % pred_df)
+            logger.debug("Computed pred df %s" % pred_df)
             pred_df["prediction"].replace(int_to_label_map, inplace=True)
             logger.info("Computed cleanpred df %s" % pred_df["prediction"].dtype)
 
@@ -204,7 +206,7 @@ def mlflow_classification_predict_to_scoring_data(mlflow_model, imported_model_m
     if probas is not None and np.isnan(probas.to_numpy()).any():
         raise Exception("MLflow model predicted NaN probabilities")
 
-    logger.info("Final pred_df: %s " % pred_df)
+    logger.debug("Final pred_df: %s " % pred_df)
     logger.info("lTIM = %s " % (imported_model_meta["labelToIntMap"]))
 
     # Fix indexing to match the input_df
