@@ -73,8 +73,8 @@ class PrepareInput:
         else:  # Type is Dataframe because we handled validation in check_input_data
             missing_columns = set(self.input_column_names).difference(set(X.columns))
             if len(missing_columns) > 0:
-                raise ValueError("Missing column in input DataFrame. Missing columns: {}".format(
-                    ",".join(self.missing_columns)))
+                raise ValueError("Missing column(s) in input DataFrame: {}".format(
+                    ",".join(missing_columns)))
             get_column_copy = lambda X, index_column, column: X[column].values
 
         # Fill the input columns data into the right matrices
@@ -86,12 +86,12 @@ class PrepareInput:
                 if np.issubdtype(data.dtype, np.number):  # if data is numeric convert nan to None
                     X_non_numeric[:, column] = np.where(np.isnan(data), None, data)
                 else:  # we have to convert empty string and nan to None
-                    X_non_numeric[:, column] = np.where(data == "", None, data)
+                    X_non_numeric[:, column] = np.where(data.astype(str) == "", None, data)
                     X_non_numeric[:, column] = np.where([x is np.nan for x in X_non_numeric[:, column]], None, X_non_numeric[:, column])
             else:
                 if np.issubdtype(data.dtype, np.number):  # if data is not numeric check empty string
                     X_numeric[:, column] = data
                 else:  # None are converted to NaN, we have to convert empty strings
-                    X_numeric[:, column] = np.where(data == "", np.nan, data)
+                    X_numeric[:, column] = np.where(data.astype(str) == "", np.nan, data)
 
         return X_numeric, X_non_numeric
