@@ -110,13 +110,16 @@ class PartitionedModel(object):
                 selected_rows = X.iloc[indices_tmp, :]
             results.extend(getattr(model, method)(selected_rows))
 
+        # Rows without which partition has no model
+        indices_no_model = np.where(~np.isin(partitions, list(self.models.keys())))[0]
+        if len(indices_no_model) > 0:
+            indices.extend(indices_no_model)
+            results.extend([None] * len(indices_no_model))
+
         return [result for result, _ in sorted(zip(results, indices), key=lambda x: x[1])]
 
     def _predict(self, X):
         return np.array(self._compute(X, "_compute_predict"))
-
-    def _compute_preprocessed(self, X):
-        return self._compute(X, "_compute_preprocessed")
 
     def _describe(self):
         description = "PartitionedModel \n" + "\n\n".join(["*** Partition {} ***\n {}".format(
@@ -135,7 +138,7 @@ class ClassificationPartitionedModel(PartitionedModel, PredictionModelMixin, Pro
         return list(self.models.values())[0].classes
 
     def _predict_proba(self, X):
-        return {label: np.array([row[label] for row in self._compute(X, "_predict_proba_list_dict")])
+        return {label: np.array([row[label] if row is not None else None for row in self._compute(X, "_predict_proba_list_dict")])
                 for label in self.classes}
 
 
