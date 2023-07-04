@@ -2,7 +2,9 @@ import logging
 import pandas as pd
 import numpy as np
 
-from .common import DoctorScoringData
+from dataikuscoring.mlflow.common import DisableMLflowTypeEnforcement
+from dataikuscoring.utils.scoring_data import ScoringData
+from dataikuscoring.utils.prediction_result import ClassificationPredictionResult
 
 logger = logging.getLogger(__name__)
 
@@ -18,32 +20,40 @@ def mlflow_try_to_get_probas(input_df, mlflow_model, labels_map):
                 return None
         return cur
 
+    # Manually enforce schema since we use mlflow_model._model_impl.predict_proba instead
+    # of mlflow_model.predict
+    from mlflow.pyfunc import _enforce_schema
+    data = input_df
+
+    input_schema = mlflow_model.metadata.get_input_schema()
+    if input_schema is not None:
+        logger.info("Enforcing schema of input data before computing proba shape={}".format(input_df.shape))
+        with DisableMLflowTypeEnforcement():
+            data = _enforce_schema(input_df, input_schema)
+        logger.info("Schema enforce new_shape={}".format(data.shape))
+    else:
+        logger.info("MLflow model was saved without a signature. Input data with unexpected columns may"
+                    "cause breakage with some ML packages, such as SKlearn.")
+
     # Classifier with "predict_proba" nested under "_model_impl" (Sklearn)
     if get_predict_proba_fn(mlflow_model, ["_model_impl", "predict_proba"]) is not None:
         logger.info("Getting probas from _model_impl for sklearn")
-        probas_raw = mlflow_model._model_impl.predict_proba(input_df)
-
+        probas_raw = mlflow_model._model_impl.predict_proba(data)
         names = ["proba_%s" % labels_map[i] for i in range(probas_raw.shape[1])]
-
         probas = pd.DataFrame(probas_raw, columns=names)
 
     # XGboost with MLflow >= 1.22
     elif get_predict_proba_fn(mlflow_model, ["_model_impl", "xgb_model", "predict_proba"]) is not None:
         logger.info("Getting probas from _model_impl for XGboost")
-
-        probas_raw = mlflow_model._model_impl.xgb_model.predict_proba(input_df)
-
+        probas_raw = mlflow_model._model_impl.xgb_model.predict_proba(data)
         names = ["proba_%s" % labels_map[i] for i in range(probas_raw.shape[1])]
-
         probas = pd.DataFrame(probas_raw, columns=names)
 
     # Catboost case
     elif get_predict_proba_fn(mlflow_model, ["_model_impl", "cb_model", "predict_proba"]) is not None:
         logger.info("Getting probas from CatBoost")
-        probas_raw = mlflow_model._model_impl.cb_model.predict_proba(input_df)
-
+        probas_raw = mlflow_model._model_impl.cb_model.predict_proba(data)
         names = ["proba_%s" % labels_map[i] for i in range(probas_raw.shape[1])]
-
         probas = pd.DataFrame(probas_raw, columns=names)
 
     else:
@@ -58,24 +68,38 @@ def mlflow_try_to_get_probas(input_df, mlflow_model, labels_map):
 
 def mlflow_classification_predict_to_scoring_data(mlflow_model, imported_model_meta, input_df, threshold=None):
     """
-    Returns a DoctorScoringData containing predictions and probas for a MLflow model.
+    Returns a ScoringData containing predictions and probas for a MLflow model.
     Performs "interpretation" of the MLflow output.
 
     Requires a prediction type on the MLflow model
     """
 
-    logger.info("Predicting it")
     labels_list = imported_model_meta["labelsList"]
     int_to_label_map = imported_model_meta["intToLabelMap"]
     label_to_int_map = imported_model_meta["labelToIntMap"]
 
-    probas, probas_raw = mlflow_try_to_get_probas(input_df, mlflow_model, int_to_label_map)
+    if not labels_list:
+        raise Exception("Can not score classification model with an empty labels list")
 
-    # Get a single array
-    mlflow_raw_preds = None
+    mlflow_raw_preds = None  # raw prediction Serie or array (can be label or values)
+    probas = None  # dataframe with the probabilities as proba_value0, proba_value1 etc.
+    probas_raw = None  # the probabilities as np.array in the same order as lavels_list
+    if imported_model_meta.get("proxyModelsConfiguration") is not None:
+        with DisableMLflowTypeEnforcement():
+            output_df = mlflow_model.predict(input_df)
+        mlflow_raw_preds = output_df["prediction"]
+        probas_df = output_df.drop("prediction", axis=1)
+        if not probas_df.empty:
+            probas = probas_df
+            proba_columns = ["proba_{}".format(int_to_label_map[i]) for i in labels_list]
+            probas_raw = probas_df[proba_columns].values  # reorder and dump as numpy
 
-    if probas_raw is None:
-        output = mlflow_model.predict(input_df)
+    if probas is None:
+        probas, probas_raw = mlflow_try_to_get_probas(input_df, mlflow_model, int_to_label_map)
+
+    if probas_raw is None and mlflow_raw_preds is None:
+        with DisableMLflowTypeEnforcement():
+            output = mlflow_model.predict(input_df)
 
         if isinstance(output, pd.DataFrame):
             logging.info("MLflow model returned a dataframe with columns: %s" % (output.columns))
@@ -188,11 +212,8 @@ def mlflow_classification_predict_to_scoring_data(mlflow_model, imported_model_m
     pred_df.index = input_df.index
     if probas is not None:
         probas.index = input_df.index
-    scoring_data = DoctorScoringData(preds=preds, probas=probas_raw, pred_df=pred_df, proba_df=probas)
 
-    if scoring_data.proba_df is not None:
-        scoring_data.pred_and_proba_df = pd.concat([scoring_data.pred_df, scoring_data.proba_df], axis=1)
-    else:
-        scoring_data.pred_and_proba_df = scoring_data.pred_df
+    prediction_result = ClassificationPredictionResult(label_to_int_map, probas=probas_raw, unmapped_preds=preds)
+    scoring_data = ScoringData(prediction_result=prediction_result, preds_df=pred_df, probas_df=probas)
 
     return scoring_data

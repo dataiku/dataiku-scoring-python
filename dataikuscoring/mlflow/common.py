@@ -5,20 +5,54 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
+class DisableMLflowTypeEnforcement(object):
+    def __enter__(self):
+        """
+        This context manager disables MLflow signature enforcement.  MLflow
+        signature enforcement raises errors when, for example, a model
+        signature declares "integer" for one of its inputs, and we call predict
+        with some floats instead.  This is a problem for example for the
+        partial dependence plot, which assumes that, for numerical features,
+        the model can work with floats (which makes sense from a ML point of
+        view).
+        """
+        try:
+            from mlflow import pyfunc
+            from mlflow.models import utils
+            def _enforce_mlflow_datatype_no_failure(name, values, t):
+                """
+                The original _enforce_mlflow_datatype can sometimes do useful casts, so we
+                still try to call it, but we ensure it never fails.
+                """
+                try:
+                    return self.original_enforce_mlflow_datatype(name, values, t)
+                except Exception:
+                    return values
+            def monkey_patch_enforce_mlflow_datatype(mlflow_module):
+                self.original_enforce_mlflow_datatype = mlflow_module._enforce_mlflow_datatype
+                mlflow_module._enforce_mlflow_datatype = _enforce_mlflow_datatype_no_failure
+            if hasattr(pyfunc, '_enforce_mlflow_datatype'):
+                monkey_patch_enforce_mlflow_datatype(pyfunc)
+            elif hasattr(utils, '_enforce_mlflow_datatype'):
+                monkey_patch_enforce_mlflow_datatype(utils)
+        except ImportError:
+            # If we're here, something has changed in MLflow (refactoring, probably) and we can't apply
+            # the monkey patch. Our integration tests will catch that, so let's silently not apply the
+            # monkey patch as a worst case scenario.
+            pass
 
-class DoctorScoringData:
-
-    def __init__(self, preds=None, probas=None, pred_df=None, proba_df=None):
-        self.preds = preds
-        self.probas = probas
-        self.pred_df = pred_df
-        self.proba_df = proba_df
-
-        if proba_df is not None:
-            pred_and_proba_df = pd.concat([pred_df, proba_df], axis=1)
-        else:
-            pred_and_proba_df = pred_df
-        self.pred_and_proba_df = pred_and_proba_df
+    def __exit__(self, exception_type, exception_value, exception_traceback):
+        try:
+            from mlflow import pyfunc
+            from mlflow.models import utils
+            def monkey_unpatch_enforce_mlflow_datatype(mlflow_module):
+                mlflow_module._enforce_mlflow_datatype = self.original_enforce_mlflow_datatype
+            if hasattr(pyfunc, '_enforce_mlflow_datatype'):
+                monkey_unpatch_enforce_mlflow_datatype(pyfunc)
+            elif hasattr(utils, '_enforce_mlflow_datatype'):
+                monkey_unpatch_enforce_mlflow_datatype(utils)
+        except ImportError:
+            pass
 
 
 def mlflow_raw_predict(mlflow_model, imported_model_meta, input_df, force_json_tensors_output=True):
@@ -69,8 +103,8 @@ def mlflow_raw_predict(mlflow_model, imported_model_meta, input_df, force_json_t
                         input_tensors = series.values
 
                     input_df = input_tensors
-
-    output = mlflow_model.predict(input_df)
+    with DisableMLflowTypeEnforcement():
+        output = mlflow_model.predict(input_df)
 
     if isinstance(output, pd.DataFrame):
         logging.info("MLflow model returned a DF with shape %s" % (output.shape,))

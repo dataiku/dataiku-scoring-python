@@ -2,14 +2,16 @@ import logging
 import pandas as pd
 import numpy as np
 
-from .common import DoctorScoringData
+from dataikuscoring.mlflow.common import DisableMLflowTypeEnforcement
+from dataikuscoring.utils.scoring_data import ScoringData
+from dataikuscoring.utils.prediction_result import PredictionResult
 
 logger = logging.getLogger(__name__)
 
 
 def mlflow_regression_predict_to_scoring_data(mlflow_model, imported_model_meta, input_df):
     """
-    Returns a DoctorScoringData containing predictions for a MLflow model.
+    Returns a ScoringData containing predictions for a MLflow model.
     Performs "interpretation" of the MLflow output.
 
     Requires a prediction type on the MLflow model
@@ -17,7 +19,8 @@ def mlflow_regression_predict_to_scoring_data(mlflow_model, imported_model_meta,
 
     logging.info("Predicting it")
 
-    output = mlflow_model.predict(input_df)
+    with DisableMLflowTypeEnforcement():
+        output = mlflow_model.predict(input_df)
 
     if isinstance(output, pd.DataFrame):
         logging.info("MLflow model returned a dataframe with columns: %s" % (output.columns))
@@ -56,6 +59,7 @@ def mlflow_regression_predict_to_scoring_data(mlflow_model, imported_model_meta,
     pred_df.index = input_df.index
     if isinstance(preds, pd.Series):
         preds.index = input_df.index
-    scoring_data = DoctorScoringData(preds=preds, pred_df=pred_df)
 
+    prediction_result = PredictionResult(preds)
+    scoring_data = ScoringData(prediction_result=prediction_result, preds_df=pred_df)
     return scoring_data
