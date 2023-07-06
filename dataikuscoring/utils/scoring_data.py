@@ -10,7 +10,7 @@ class ScoringData(object):
                  probas_df=None, decisions_and_cuts=None, reason=None, valid_unprocessed=None):
         """
         :type is_empty: bool
-        :type prediction_result: dataikuscoring.mlflow.prediction_result.AbstractPredictionResult or None
+        :type prediction_result: dataikuscoring.utils.prediction_result.AbstractPredictionResult or None
         :type valid_y: pd.Series or None
         :type valid_sample_weights: pd.Series or None
         :type preds_df: pd.DataFrame or None

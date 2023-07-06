@@ -2,7 +2,7 @@ import logging
 import pandas as pd
 import numpy as np
 
-from dataikuscoring.mlflow.common import DisableMLflowTypeEnforcement
+from dataikuscoring.mlflow.common import DisableMLflowTypeEnforcement, convert_date_features
 from dataikuscoring.utils.scoring_data import ScoringData
 from dataikuscoring.utils.prediction_result import PredictionResult
 
@@ -16,6 +16,8 @@ def mlflow_regression_predict_to_scoring_data(mlflow_model, imported_model_meta,
 
     Requires a prediction type on the MLflow model
     """
+    input_df = input_df.copy()
+    convert_date_features(imported_model_meta, input_df)
 
     logging.info("Predicting it")
 
@@ -53,7 +55,7 @@ def mlflow_regression_predict_to_scoring_data(mlflow_model, imported_model_meta,
     if np.isnan(pred_df.to_numpy()).any():
         raise Exception("MLflow model predicted NaN probabilities")
 
-    logger.info("Final pred_df: %s " % pred_df)
+    logger.debug("Final pred_df: %s " % pred_df)
 
     # Fix indexing to match the input_df
     pred_df.index = input_df.index
