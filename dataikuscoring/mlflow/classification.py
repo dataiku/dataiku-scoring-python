@@ -89,8 +89,11 @@ def mlflow_classification_predict_to_scoring_data(mlflow_model, imported_model_m
     if imported_model_meta.get("proxyModelsConfiguration") is not None:
         with DisableMLflowTypeEnforcement():
             output_df = mlflow_model.predict(input_df)
-        mlflow_raw_preds = output_df["prediction"]
-        probas_df = output_df.drop("prediction", axis=1)
+        if "prediction" in output_df:
+            mlflow_raw_preds = output_df["prediction"]
+            probas_df = output_df.drop("prediction", axis=1)
+        else:
+            probas_df = output_df
         if not probas_df.empty:
             probas = probas_df
             proba_columns = ["proba_{}".format(int_to_label_map[i]) for i in labels_list]
@@ -102,6 +105,9 @@ def mlflow_classification_predict_to_scoring_data(mlflow_model, imported_model_m
     if probas_raw is None and mlflow_raw_preds is None:
         with DisableMLflowTypeEnforcement():
             output = mlflow_model.predict(input_df)
+
+        if isinstance(output, list):
+            output = np.array(output)
 
         if isinstance(output, pd.DataFrame):
             logging.info("MLflow model returned a dataframe with columns: %s" % (output.columns))
@@ -119,7 +125,13 @@ def mlflow_classification_predict_to_scoring_data(mlflow_model, imported_model_m
                 else:
                     mlflow_raw_preds = output[output.columns[0]]
             elif len(output.columns) == len(labels_list):
-                # It is outputting probas, but not the actual prediction
+                # It is outputting probas, but not the actual prediction.
+                # Let's make sure we are dealing with floats first: when the df is coming
+                # from proxy models, it is easy to lose the initial type, for example
+                # when we communicate using CSV.
+                output_non_numeric_cols = output.select_dtypes(exclude=[np.number]).columns
+                for col in output_non_numeric_cols:
+                    output[col] = output[col].astype(float)
                 probas_raw = output.to_numpy()
             else:
                 raise Exception("Can't handle model output of shape=%s" % (output.shape,))
@@ -149,9 +161,15 @@ def mlflow_classification_predict_to_scoring_data(mlflow_model, imported_model_m
     if mlflow_raw_preds.shape[0] == 0:
         raise Exception("Cannot work with no data at input")
 
+    if imported_model_meta["predictionType"] == "BINARY_CLASSIFICATION" and \
+            not pd.api.types.is_numeric_dtype(mlflow_raw_preds):
+        # let's check if mlflow_raw_preds are actually floats and use that if yes
+        raw_preds_numeric = pd.to_numeric(mlflow_raw_preds, errors="ignore")
+        if raw_preds_numeric.dtype == float:
+            mlflow_raw_preds = raw_preds_numeric
+
     first_value = mlflow_raw_preds.iloc[0] if isinstance(mlflow_raw_preds, pd.Series) else mlflow_raw_preds[0]
     # Then determine if we already have labels, or if we have class indices
-
     if isinstance(first_value, str):
         logger.info("MLflow outputs labels, converting")
         # Model outputs labels
