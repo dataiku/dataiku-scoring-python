@@ -142,6 +142,9 @@ def mlflow_raw_predict(mlflow_model, imported_model_meta, input_df, force_json_t
             return pd.DataFrame({"prediction": tensors_list})
         else:
             raise Exception("Can't handle MLflow model output of shape=%s" % (shape,))
+    elif isinstance(output, list):
+        return pd.DataFrame(output)
+
 
     else:
         raise Exception("Can't handle MLflow model output: %s" % type(output))

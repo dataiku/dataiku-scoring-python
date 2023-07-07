@@ -24,6 +24,9 @@ def mlflow_regression_predict_to_scoring_data(mlflow_model, imported_model_meta,
     with DisableMLflowTypeEnforcement():
         output = mlflow_model.predict(input_df)
 
+    if isinstance(output, list):
+        output = np.array(output)
+
     if isinstance(output, pd.DataFrame):
         logging.info("MLflow model returned a dataframe with columns: %s" % (output.columns))
         if "predictions" in output.columns and "target" in output.columns:
@@ -48,6 +51,9 @@ def mlflow_regression_predict_to_scoring_data(mlflow_model, imported_model_meta,
 
     if mlflow_raw_preds.shape[0] == 0:
         raise Exception("Cannot work with no data at input")
+
+    if not pd.api.types.is_numeric_dtype(mlflow_raw_preds):
+        mlflow_raw_preds = mlflow_raw_preds.astype(float)
 
     preds = mlflow_raw_preds
     pred_df = pd.DataFrame({"prediction": preds})

@@ -5,6 +5,74 @@ import numpy as np
 from .common import PredictionModelMixin, ProbabilisticModelMixin
 
 
+def get_dimension_value(value, dimension_name, dimension_type, dimensions_values=None):
+    """Extract the exact partition dimension value from the dimension type.
+
+    Args:
+        :param str/int/float/datetime value: value of the partition dimension, can be of many form (str, date, timestamp, ...)
+        :param str dimension_name: name of the partition dimension
+        :param str dimension_type: type of the partition dimension
+        :param dict dimensions_values: dict of list of dimension values per dimension name. Defaults to None.
+
+        :return: str
+    """    
+    if dimension_type == "DISCRETE":
+        return value
+    else:
+        return _get_time_dimension_value(value, dimension_name, dimension_type, dimensions_values=dimensions_values)
+
+
+def _get_time_dimension_value(value, dimension_name, dimension_type, dimensions_values=None):
+    """
+    This is basically a copy of what is done in Java (PartitionedPipeline.getTimeDimensionValue).
+    """
+    def _get_time_dimension_value_from_timestamp(value, dimension_type, milliseconds=True):
+        datetime_value = datetime.fromtimestamp(value / 1000) if milliseconds else datetime.fromtimestamp(value)
+        return _get_time_dimension_value_from_datetime(datetime_value, dimension_type)
+    
+    def _get_time_dimension_value_from_datetime(value, dimension_type):
+        dimension_value = ""
+        if dimension_type == "HOUR":
+            dimension_value = "-%02d" % value.hour
+        if dimension_type in ("HOUR", "DAY"):
+            dimension_value = "-%02d" % value.day + dimension_value
+        if dimension_type in ("HOUR", "DAY", "MONTH"):
+            dimension_value = "-%02d" % value.month + dimension_value
+        if dimension_type in ("HOUR", "DAY", "MONTH", "YEAR"):
+            dimension_value = "%02d" % value.year + dimension_value
+        return dimension_value
+
+    if isinstance(value, (str)):
+        if dimensions_values and value in dimensions_values[dimension_name]:
+            return value
+        elif dimension_type == "YEAR" and re.match(r"^\d{4}$", value):
+            # a YEAR value of format "yyyy" should not be interpreted as an epoch even though it can be parsed as an int
+            return value
+        elif value.isdigit() or (value[0] in ("-", "+") and value[1:].isdigit()):
+            epoch = int(value)
+            return _get_time_dimension_value_from_timestamp(epoch, dimension_type)
+        elif re.match(
+            r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?(([+-]\d\d:\d\d)|Z)?$",
+            value,
+        ):  # "yyyy-MM-dd'T'HH:mm:ss.SSSXXX"
+            return _get_time_dimension_value_from_timestamp(
+                (
+                    datetime.strptime(value, "%Y-%m-%dT%H:%M:%S.%fZ") - datetime(1970, 1, 1)
+                ).total_seconds(), dimension_type, milliseconds=False
+            )
+        else:
+            return value
+
+    elif isinstance(value, (float, int)):
+        return _get_time_dimension_value_from_timestamp(value, dimension_type)
+    
+    elif isinstance(value, datetime):  # works also with pd.Timestamp
+        return _get_time_dimension_value_from_datetime(value, dimension_type)
+
+    else:
+        raise ValueError("Unknown dimension value type for {} / {} : {}".format(dimension_name, dimension_type, type(value)))
+
+
 class PartitionedModel(object):
 
     def __init__(self, models, resources):
@@ -16,55 +84,15 @@ class PartitionedModel(object):
             for partition_dimension, dimension in zip(partition.split("|"), self.dimensions):
                 self.dimensions_values[dimension].append(partition_dimension)
 
-    def _get_time_dimension_value(self, value, dimension, dimension_type):
-
-        def _get_time_dimension_value_from_timestamp(value, dimension_type, milliseconds=True):
-            dimension_value = ""
-            cal = datetime.fromtimestamp(value / 1000) if milliseconds else datetime.fromtimestamp(value)
-
-            if dimension_type == "HOUR":
-                dimension_value = "-%02d" % cal.hour
-            if dimension_type in ("HOUR", "DAY"):
-                dimension_value = "-%02d" % cal.day + dimension_value
-            if dimension_type in ("HOUR", "DAY", "MONTH"):
-                dimension_value = "-%02d" % cal.month + dimension_value
-            if dimension_type in ("HOUR", "DAY", "MONTH", "YEAR"):
-                dimension_value = "%02d" % cal.year + dimension_value
-            return dimension_value
-
-        if isinstance(value, (str)):
-            if value in self.dimensions_values[dimension]:
-                return value
-            elif value.isdigit() or (value[0] in ("-", "+") and value[1:].isdigit()):
-                epoch = int(value)
-                return _get_time_dimension_value_from_timestamp(epoch, dimension_type)
-
-            elif re.match(
-                r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?(([+-]\d\d:\d\d)|Z)?$",
-                value,
-            ):  # "yyyy-MM-dd'T'HH:mm:ss.SSSXXX"
-                return _get_time_dimension_value_from_timestamp(
-                    (
-                        datetime.strptime(value, "%Y-%m-%dT%H:%M:%S.%fZ") - datetime(1970, 1, 1)
-                    ).total_seconds(), dimension_type, milliseconds=False
-                )
-            else:
-                return value
-
-        elif isinstance(value, (float, int)):
-            return _get_time_dimension_value_from_timestamp(value, dimension_type)
-
-        else:
-            raise ValueError("Unknown dimension value type for {} / {} : {}".format(dimension, dimension_type, type(value)))
-
     def get_partition_for_dict(self, data):
         for dimension in self.dimensions:
             assert dimension in data, (
                 "Data is missing dimension {} required for partitioning".format(dimension))
 
         partition = "|".join([
-            str(data[dimension]) if dimension_type == "DISCRETE" else
-            self._get_time_dimension_value(data[dimension], dimension, dimension_type)
+            str(get_dimension_value(
+                data[dimension], dimension, dimension_type, dimensions_values=self.dimensions_values
+            ))
             for dimension, dimension_type in zip(self.dimensions, self.dimensions_types)
         ])
 
@@ -73,8 +101,9 @@ class PartitionedModel(object):
     def get_partition_for_list(self, data):
         input_column_names = self.prepare_input.input_column_names
         partition = "|".join([
-            str(data[input_column_names.index(dimension)]) if dimension_type == "DISCRETE" else
-            self._get_time_dimension_value(data[input_column_names.index(dimension)], dimension, dimension_type)
+            str(get_dimension_value(
+                data[input_column_names.index(dimension)], dimension, dimension_type, dimensions_values=self.dimensions_values
+            ))
             for dimension, dimension_type in zip(self.dimensions, self.dimensions_types)
         ])
 
