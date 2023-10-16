@@ -129,7 +129,7 @@ class ClassificationPredictionResult(AbstractPredictionResult):
     def unmapped_preds(self):  # Only computes un-mapping if needed
         if self._unmapped_preds is None:
             if self._preds.shape[0] == 0:
-                self._unmapped_preds = np.empty((0,)).astype(np.int)
+                self._unmapped_preds = np.empty((0,)).astype(int)
             else:
                 self._unmapped_preds = pd.Series(self._preds).map(self._target_map).values
 
