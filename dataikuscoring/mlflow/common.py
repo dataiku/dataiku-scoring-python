@@ -85,7 +85,7 @@ def mlflow_raw_predict(mlflow_model, imported_model_meta, input_df, force_json_t
                     df_rows = input_df.shape[0]
                     series = input_df[input_df.columns[0]]
 
-                    if df_rows > 0 and series.dtype == np.object:
+                    if df_rows > 0 and series.dtype == object:
                         def str_to_ndarray(s):
                             f = json.loads(s)
                             return np.array(f)

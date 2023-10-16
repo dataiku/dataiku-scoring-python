@@ -86,7 +86,7 @@ def mlflow_classification_predict_to_scoring_data(mlflow_model, imported_model_m
     mlflow_raw_preds = None  # raw prediction Serie or array (can be label or values)
     probas = None  # dataframe with the probabilities as proba_value0, proba_value1 etc.
     probas_raw = None  # the probabilities as np.array in the same order as lavels_list
-    if imported_model_meta.get("proxyModelsConfiguration") is not None:
+    if imported_model_meta.get("proxyModelVersionConfiguration") is not None:
         with DisableMLflowTypeEnforcement():
             output_df = mlflow_model.predict(input_df)
         if "prediction" in output_df:
@@ -212,7 +212,7 @@ def mlflow_classification_predict_to_scoring_data(mlflow_model, imported_model_m
             logger.info("Overriding prediction using probabilities and threshold={}".format(threshold))
 
             probas_one = probas["proba_%s" % int_to_label_map[1]]
-            preds = (probas_one > threshold).astype(np.int)
+            preds = (probas_one > threshold).astype(int)
             pred_df = pd.DataFrame({"prediction": preds})
             logger.debug("Computed pred df %s" % pred_df)
             pred_df["prediction"].replace(int_to_label_map, inplace=True)
