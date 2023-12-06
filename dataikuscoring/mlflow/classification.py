@@ -1,15 +1,19 @@
 import logging
-import pandas as pd
-import numpy as np
 
-from dataikuscoring.mlflow.common import DisableMLflowTypeEnforcement, convert_date_features
-from dataikuscoring.utils.scoring_data import ScoringData
+import numpy as np
+import pandas as pd
+
+from dataikuscoring.mlflow.common import DisableMLflowTypeEnforcement
+from dataikuscoring.mlflow.common import convert_date_features
 from dataikuscoring.utils.prediction_result import ClassificationPredictionResult
+from dataikuscoring.utils.scoring_data import ScoringData
 
 logger = logging.getLogger(__name__)
 
 
 def mlflow_try_to_get_probas(input_df, mlflow_model, labels_map):
+    from mlflow.pyfunc import _enforce_schema
+
     # Try to gather probas from the model
     def get_predict_proba_fn(model, path_elts):
         cur = model
@@ -22,7 +26,6 @@ def mlflow_try_to_get_probas(input_df, mlflow_model, labels_map):
 
     # Manually enforce schema since we use mlflow_model._model_impl.predict_proba instead
     # of mlflow_model.predict
-    from mlflow.pyfunc import _enforce_schema
     data = input_df
 
     input_schema = mlflow_model.metadata.get_input_schema()
@@ -67,8 +70,6 @@ def mlflow_try_to_get_probas(input_df, mlflow_model, labels_map):
 
 
 def mlflow_classification_predict_to_scoring_data(mlflow_model, imported_model_meta, input_df, threshold=None):
-    input_df = input_df.copy()
-    convert_date_features(imported_model_meta, input_df)
     """
     Returns a ScoringData containing predictions and probas for a MLflow model.
     Performs "interpretation" of the MLflow output.
@@ -76,6 +77,8 @@ def mlflow_classification_predict_to_scoring_data(mlflow_model, imported_model_m
     Requires a prediction type on the MLflow model
     """
 
+    input_df = input_df.copy()
+    convert_date_features(imported_model_meta, input_df)
     labels_list = imported_model_meta["labelsList"]
     int_to_label_map = imported_model_meta["intToLabelMap"]
     label_to_int_map = imported_model_meta["labelToIntMap"]
@@ -83,7 +86,7 @@ def mlflow_classification_predict_to_scoring_data(mlflow_model, imported_model_m
     if not labels_list:
         raise Exception("Can not score classification model with an empty labels list")
 
-    mlflow_raw_preds = None  # raw prediction Serie or array (can be label or values)
+    mlflow_raw_preds = None  # raw prediction Series or array (can be label or values)
     probas = None  # dataframe with the probabilities as proba_value0, proba_value1 etc.
     probas_raw = None  # the probabilities as np.array in the same order as lavels_list
     if imported_model_meta.get("proxyModelVersionConfiguration") is not None:
@@ -102,6 +105,7 @@ def mlflow_classification_predict_to_scoring_data(mlflow_model, imported_model_m
     if probas is None:
         probas, probas_raw = mlflow_try_to_get_probas(input_df, mlflow_model, int_to_label_map)
 
+    # FIXME: could we be running predict multiple times?
     if probas_raw is None and mlflow_raw_preds is None:
         with DisableMLflowTypeEnforcement():
             output = mlflow_model.predict(input_df)
@@ -161,8 +165,7 @@ def mlflow_classification_predict_to_scoring_data(mlflow_model, imported_model_m
     if mlflow_raw_preds.shape[0] == 0:
         raise Exception("Cannot work with no data at input")
 
-    if imported_model_meta["predictionType"] == "BINARY_CLASSIFICATION" and \
-            not pd.api.types.is_numeric_dtype(mlflow_raw_preds):
+    if imported_model_meta["predictionType"] == "BINARY_CLASSIFICATION" and not pd.api.types.is_numeric_dtype(mlflow_raw_preds):
         # let's check if mlflow_raw_preds are actually floats and use that if yes
         raw_preds_numeric = pd.to_numeric(mlflow_raw_preds, errors="ignore")
         if raw_preds_numeric.dtype == float:

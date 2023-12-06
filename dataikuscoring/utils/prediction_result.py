@@ -16,6 +16,16 @@ PROBABILITIES = "probabilities"
 @six.add_metaclass(ABCMeta)
 class AbstractPredictionResult(object):
 
+    def align_with_not_declined(self, array):
+        return array
+
+    def assert_not_all_declined(self):
+        return
+
+    @property
+    def preds_not_declined(self):
+        return self.align_with_not_declined(self.preds)
+
     @property
     @abstractmethod
     def preds(self):
@@ -118,22 +128,25 @@ class ClassificationPredictionResult(AbstractPredictionResult):
         self._unmapped_preds = unmapped_preds
         self.probas = probas
 
+    @property
+    def unmapped_preds_not_declined(self):
+        if self._unmapped_preds is None:
+            if self._preds.shape[0] == 0:
+                self._unmapped_preds = np.empty((0,)).astype(int)
+            else:
+                self._unmapped_preds = pd.Series(self._preds).map(self._target_map).values
+        return self.align_with_not_declined(self._unmapped_preds).astype(int)
+
+    @property
+    def probas_not_declined(self):
+        return self.probas
+
     def has_probas(self):
         return self.probas is not None
 
     @property
     def target_map(self):
         return self._target_map
-
-    @property
-    def unmapped_preds(self):  # Only computes un-mapping if needed
-        if self._unmapped_preds is None:
-            if self._preds.shape[0] == 0:
-                self._unmapped_preds = np.empty((0,)).astype(int)
-            else:
-                self._unmapped_preds = pd.Series(self._preds).map(self._target_map).values
-
-        return self._unmapped_preds
 
     @property
     def preds(self):  # Only computes mapping if needed
