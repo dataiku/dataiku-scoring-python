@@ -30,7 +30,7 @@ class MLflowModel(PredictionModelMixin, ProbabilisticModelMixin):
         if "predictionType" not in self.metadata:
             raise Exception("Prediction type is not set on the MLFlow model version, cannot use parsed output")
 
-        prediction_type = self.metadata["predictionType"]
+        prediction_type = self.metadata.get("predictionType")
 
         if prediction_type in ["BINARY_CLASSIFICATION", "MULTICLASS"]:
             scoring_data = mlflow_classification_predict_to_scoring_data(self.model, self.metadata, input_df, self.threshold)
@@ -46,8 +46,11 @@ class MLflowModel(PredictionModelMixin, ProbabilisticModelMixin):
         return np.array([output[0] for output in y_pred.values.tolist()])
 
     def _predict_proba(self, X):
-        if self.metadata["predictionType"] == "REGRESSION":
+        if self.metadata.get("predictionType") == "REGRESSION":
             raise Exception("You cannot output probabilities for regressions.")
+
+        if not self.metadata.get("predictionType"):
+            raise Exception("You cannot output probabilities for non tabular models.")
 
         y_probas = self._compute_predict(X).values[:, 1:]
         labels = [x["label"] for x in self.metadata["classLabels"]]
@@ -56,4 +59,4 @@ class MLflowModel(PredictionModelMixin, ProbabilisticModelMixin):
         return result
 
     def _describe(self):
-        return "{} with MLFlow model".format(self.metadata["predictionType"])
+        return "{} with MLFlow model".format(self.metadata.get("predictionType"))
