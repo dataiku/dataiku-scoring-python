@@ -105,7 +105,6 @@ def mlflow_classification_predict_to_scoring_data(mlflow_model, imported_model_m
     if probas is None:
         probas, probas_raw = mlflow_try_to_get_probas(input_df, mlflow_model, int_to_label_map)
 
-    # FIXME: could we be running predict multiple times?
     if probas_raw is None and mlflow_raw_preds is None:
         with DisableMLflowTypeEnforcement():
             output = mlflow_model.predict(input_df)
@@ -178,6 +177,12 @@ def mlflow_classification_predict_to_scoring_data(mlflow_model, imported_model_m
         # Model outputs labels
         preds = pd.Series(mlflow_raw_preds).replace(label_to_int_map)
         pred_df = pd.DataFrame({"prediction": mlflow_raw_preds})
+    elif isinstance(first_value, bool) or isinstance(first_value, np.bool_):
+        logger.info("MLflow outputs booleans, converting to str and assuming those are labels")
+        # Model outputs labels
+        mlflow_raw_preds_str = mlflow_raw_preds.astype(str)
+        preds = pd.Series(mlflow_raw_preds_str).replace(label_to_int_map)
+        pred_df = pd.DataFrame({"prediction": mlflow_raw_preds_str})
     elif isinstance(first_value, int) or isinstance(first_value, np.integer):
         # Model outputs integers
         logger.info("MLflow outputs integers, converting")
@@ -221,8 +226,13 @@ def mlflow_classification_predict_to_scoring_data(mlflow_model, imported_model_m
             pred_df["prediction"].replace(int_to_label_map, inplace=True)
             logger.info("Computed cleanpred df %s" % pred_df["prediction"].dtype)
 
-    if np.isnan(preds).any():
-        raise Exception("MLflow model predicted NaN values")
+    try:
+        if np.isnan(preds).any():
+            raise Exception("MLflow model predicted NaN values")
+    except TypeError as e:
+        raise Exception("Caught a TypeError while checking if there was any NaN values in the MLflow model predictions. "
+                        "One common cause of this problem is when there is a mismatch between the model predictions and the declared classes, "
+                        "but it could be something else.") from e
 
     if probas is not None and np.isnan(probas.to_numpy()).any():
         raise Exception("MLflow model predicted NaN probabilities")
