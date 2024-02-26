@@ -230,9 +230,13 @@ def mlflow_classification_predict_to_scoring_data(mlflow_model, imported_model_m
         if np.isnan(preds).any():
             raise Exception("MLflow model predicted NaN values")
     except TypeError as e:
-        raise Exception("Caught a TypeError while checking if there was any NaN values in the MLflow model predictions. "
-                        "One common cause of this problem is when there is a mismatch between the model predictions and the declared classes, "
-                        "but it could be something else.") from e
+        logger.error(e)
+        exception_with_cause = Exception("Caught a TypeError while checking if there was any NaN values in the MLflow model predictions. "
+                                  "One common cause of this problem is when there is a mismatch between the model predictions and the declared classes, "
+                                  "but it could be something else.")
+        # Not using raise ... from to make this file parseable in Python 2.7
+        exception_with_cause.__cause__ = e
+        raise exception_with_cause
 
     if probas is not None and np.isnan(probas.to_numpy()).any():
         raise Exception("MLflow model predicted NaN probabilities")
