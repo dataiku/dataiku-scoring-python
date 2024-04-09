@@ -19,7 +19,7 @@ class Selection:
                 self.explained_standard_deviations = [x**0.5 for x in self.selection_params["explained_variance"]]
 
     def process_sparse(self, X_numeric):
-        v = np.where(np.isnan(X_numeric[:, self.feature_columns]), 0.0, X_numeric[:, self.feature_columns])
+        v = np.where(np.isnan(X_numeric[:, self.feature_columns]), np.nan, X_numeric[:, self.feature_columns])
         return np.dot(v, self.rot)
 
     def process_dense(self, X_numeric):

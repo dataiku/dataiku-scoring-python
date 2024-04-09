@@ -10,6 +10,7 @@ class Dummify(Preprocessor):
 
     def __init__(self, parameters):
         self.parameters = parameters["details"]
+        self.missing_value = parameters["missing_value"]
 
     def process(self, X_numeric, X_non_numeric):
         for column, parameters in self.parameters.items():
@@ -21,12 +22,12 @@ class Dummify(Preprocessor):
 
             # Missing values
             mask_none = X_non_numeric[:, column] == None
-            X_numeric[:, "dummy:{}:N/A".format(column)] = np.where(mask_none, 1, 0)
+            X_numeric[:, "dummy:{}:N/A".format(column)] = np.where(mask_none, 1, self.missing_value)
 
             # Values unseen during training
             if parameters["with_others"]:
                 mask_others = ~(mask_none + mask_in_levels)
-                X_numeric[:, "dummy:{}:{}".format(column, "__Others__")] = np.where(mask_others, 1, 0)
+                X_numeric[:, "dummy:{}:{}".format(column, "__Others__")] = np.where(mask_others, 1, self.missing_value)
         return X_numeric, X_non_numeric
 
     def __repr__(self):

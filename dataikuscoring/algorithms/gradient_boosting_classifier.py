@@ -6,10 +6,8 @@ from .common import Classifier
 
 
 class GradientBoostingClassifier(Classifier):
-
     def __init__(self, model_parameters):
-        self.trees = [[DecisionTreeModel(model_parameters) for model_parameters in trees]
-                      for trees in model_parameters["trees"]]
+        self.trees = [[DecisionTreeModel(model_parameters) for model_parameters in trees] for trees in model_parameters["trees"]]
         self.shrinkage = model_parameters["shrinkage"]
         self.baseline = np.array(model_parameters["baseline"])
         self.num_classes = 2 if len(self.trees[0]) == 1 else len(self.trees[0])
