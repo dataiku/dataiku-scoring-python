@@ -9,7 +9,7 @@ import re
 import codecs
 import logging
 import warnings
-
+import numpy as np
 
 from .processors import Preprocessings, PREPROCESSORS, Calibrator, DropRows, PrepareInput
 from .algorithms import ALGORITHMS
@@ -107,6 +107,17 @@ def load_resources_from_resource_folder(resources_folder):
             # Needs to be JSON serializable
             preprocessors.append((Preprocessor.__name__, parameters))
 
+    # XGBoost sparse matrices handling
+    with open(os.path.join(resources_folder, "iperf.json")) as f:
+        model_input_is_sparse = json.load(f).get("modelInputIsSparse", False)
+
+    with open(os.path.join(resources_folder, "rmodeling_params.json")) as f:
+        xgboost_grid = json.load(f).get("xgboost_grid")
+        if xgboost_grid is None:
+            missing_value = 0
+        else:
+            missing_value = xgboost_grid.get("missing", 0.0) if not model_input_is_sparse else np.nan
+
     # Feature Selection
     selection_filename = os.path.join(resources_folder, "feature_selection.json")
     if os.path.isfile(selection_filename):
@@ -129,6 +140,7 @@ def load_resources_from_resource_folder(resources_folder):
         "preprocessors": preprocessors,
         "selection": selection,
         "drop_rows": drop_rows,
+        "missing_value": missing_value,
         "feature_columns": feature_columns
     }
 
@@ -214,10 +226,9 @@ def create_model(resources):
             algorithm_name = "MLP_REGRESSOR"
         else:
             algorithm_name = "MLP_CLASSIFIER"
-
     parameters = {
         "prepare_input": PrepareInput(resources),
-        "algorithm": ALGORITHMS[algorithm_name](resources["model_parameters"]),
+        "algorithm": ALGORITHMS[algorithm_name](dict({"missing_value": resources["missing_value"]}, **resources["model_parameters"])),
         "preprocessings": Preprocessings(resources),
         "classes": resources["meta"].get("classes"),
         "calibration": Calibrator(resources),
@@ -226,7 +237,6 @@ def create_model(resources):
 
     if "threshold" in resources:
         parameters["threshold"] = resources["threshold"]
-
     return MODELS[resources["meta"]["type"]](**parameters)
 
 

@@ -2,15 +2,20 @@
 Warning: This module MUST NOT be imported in any common area of the package as it relies on pandas
 """
 
+from abc import ABCMeta
+from abc import abstractmethod
+
 import numpy as np
 import pandas as pd
 import six
-from abc import abstractmethod
-from abc import ABCMeta
-
 
 PREDICTION = "prediction"
 PROBABILITIES = "probabilities"
+PREDICTION_INTERVAL_LOWER = "prediction_interval_lower"
+PREDICTION_INTERVAL_UPPER = "prediction_interval_upper"
+
+PREDICTION_INTERVAL_LOWER_CAMEL = "predictionIntervalLower"
+PREDICTION_INTERVAL_UPPER_CAMEL = "predictionIntervalUpper"
 
 
 @six.add_metaclass(ABCMeta)
@@ -50,7 +55,7 @@ class AbstractPredictionResult(object):
         """
 
     @abstractmethod
-    def as_dataframe(self):
+    def as_dataframe(self, for_json_serialization=False):
         """
         Builds & returns a DataFrame representation of the result:
         WARNING:
@@ -58,6 +63,7 @@ class AbstractPredictionResult(object):
             a pristine range index and MUST be indexed afterwards
           * For classification, proba columns are returned as a tuple ("probabilities", "class_name"), which differs
             from the usual "proba_className"
+        :param bool for_json_serialization: If true it will output the column names in camelCase notation
         :return: the prediction result as a DataFrame
         :rtype: pd.DataFrame
         """
@@ -80,14 +86,42 @@ class AbstractPredictionResult(object):
 
 class PredictionResult(AbstractPredictionResult):
 
-    def as_dataframe(self):
-        return pd.DataFrame({PREDICTION: self.preds})
+    def as_dataframe(self, for_json_serialization=False):
+        prediction_df = pd.DataFrame({PREDICTION: self.preds})
+        if not self.has_prediction_intervals():
+            return prediction_df
+        intervals = self.prediction_intervals
+        if for_json_serialization:
+            prediction_df[PREDICTION_INTERVAL_LOWER_CAMEL] = intervals[:, 0]
+            prediction_df[PREDICTION_INTERVAL_UPPER_CAMEL] = intervals[:, 1]
+        else:
+            prediction_df[PREDICTION_INTERVAL_LOWER] = intervals[:, 0]
+            prediction_df[PREDICTION_INTERVAL_UPPER] = intervals[:, 1]
+        return prediction_df
 
-    def __init__(self, preds):
+    def __init__(self, preds, prediction_intervals=None):
         """
         :type preds: np.ndarray
+        :type prediction_intervals: np.ndarray
         """
         self._preds = preds
+        self._prediction_intervals = prediction_intervals
+
+    @property
+    def prediction_intervals(self):
+        """
+        returns a 2D array with the prediction intervals
+        :rtype: np.ndarray
+        """
+        return self._prediction_intervals
+
+    @property
+    def prediction_intervals_not_declined(self):
+        """
+        Computes and returns a 2D array with the prediction intervals keeping only not declined rows
+        :rtype: np.ndarray
+        """
+        return self.align_with_not_declined(self._prediction_intervals)
 
     @property
     def preds(self):
@@ -95,6 +129,9 @@ class PredictionResult(AbstractPredictionResult):
 
     def is_empty(self):
         return self._preds.shape[0] == 0
+
+    def has_prediction_intervals(self):
+        return self._prediction_intervals is not None
 
     @staticmethod
     def _concat(prediction_results):
@@ -105,7 +142,11 @@ class PredictionResult(AbstractPredictionResult):
         if len(prediction_results) == 0:
             raise ValueError("Cannot concat 0 results")
         preds_concat = np.concatenate([prediction_result._preds for prediction_result in prediction_results])
-        return PredictionResult(preds_concat)
+        if prediction_results[0].has_prediction_intervals():
+            intervals_concat = np.concatenate([pr._prediction_intervals for pr in prediction_results])
+        else:
+            intervals_concat = None
+        return PredictionResult(preds_concat, intervals_concat)
 
 
 class ClassificationPredictionResult(AbstractPredictionResult):
@@ -163,7 +204,7 @@ class ClassificationPredictionResult(AbstractPredictionResult):
         else:
             return self._unmapped_preds.shape[0] == 0
 
-    def as_dataframe(self):
+    def as_dataframe(self, for_json_serialization=False):
         preds_df = pd.DataFrame(({PREDICTION: self.preds}))
         if not self.has_probas():
             return preds_df

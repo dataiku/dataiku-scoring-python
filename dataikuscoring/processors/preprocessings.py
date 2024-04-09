@@ -12,12 +12,14 @@ class Preprocessings:
         :param resources:
         """
         PREPROCESSORS_DICT = {preprocessor.__name__: preprocessor for preprocessor in PREPROCESSORS}
-
+        self.missing_value = resources["missing_value"]
+        print("Model missing value: {}".format(self.missing_value))
         self.number_of_feature_columns = len(resources["feature_columns"])
 
         # The order matters and is guaranteed by load_resources_from_resource_folder in load.py
-        self.processors = [PREPROCESSORS_DICT[preprocessor_name](parameters)
+        self.processors = [PREPROCESSORS_DICT[preprocessor_name](dict({"missing_value": self.missing_value}, **parameters))
                            for preprocessor_name, parameters in resources["preprocessors"]]
+
 
         self.selection = Selection(resources)
 
@@ -26,8 +28,8 @@ class Preprocessings:
             X_numeric, X_non_numeric = processor.process(X_numeric, X_non_numeric)
 
         result = self.selection.select(X_numeric, number_of_columns=self.number_of_feature_columns)
-
-        return np.where(np.isnan(result), 0, result)  # Replace nan by 0
+        result = np.where(np.isnan(result), self.missing_value, result)
+        return result
 
     def __repr__(self):
         return "\n".join(["- {}".format(p.__repr__()) for p in self.processors])
