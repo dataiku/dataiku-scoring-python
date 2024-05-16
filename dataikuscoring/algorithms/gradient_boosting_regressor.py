@@ -9,8 +9,9 @@ class GradientBoostingRegressor(Regressor):
     def __init__(self, model_parameters):
         self.trees = [DecisionTreeModel(model_parameters)
                       for model_parameters in model_parameters["trees"]]
-        self.shrinkage = model_parameters["shrinkage"]
-        self.baseline = model_parameters["baseline"]
+        self.prediction_dtype = self.trees[0].label_dtype  # np.float32 iff model from XGBoost
+        self.shrinkage = self.prediction_dtype(model_parameters["shrinkage"])
+        self.baseline = self.prediction_dtype(model_parameters["baseline"])
         self.gamma_regression = model_parameters.get("gamma_regression", False)
         self.feature_converter = self.trees[0].feature_converter
 
@@ -19,10 +20,16 @@ class GradientBoostingRegressor(Regressor):
 
     def _predict(self, data):
         if self.gamma_regression:
-            result = np.exp(np.sum([tree._predict(data) for tree in self.trees]) * self.shrinkage) * self.baseline
+            result = np.exp(np.sum([tree._predict(data) for tree in self.trees], dtype=self.prediction_dtype) * self.shrinkage) * self.baseline
+        elif self.prediction_dtype == np.float32:
+            # Avoid np.sum to replicate XGBoost results
+            p = np.float32(0.)
+            for tree in self.trees:
+                p += tree._predict(data)
+            result = self.baseline + self.shrinkage * p
         else:
-            result = np.sum([tree._predict(data) for tree in self.trees]) * self.shrinkage + self.baseline
-        return result
+            result = self.baseline + self.shrinkage * np.sum([tree._predict(data) for tree in self.trees])
+        return float(result)
 
     def __repr__(self):
         return "GradientBoostingRegressor(n_trees={})".format(len(self.trees))
