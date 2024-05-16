@@ -72,12 +72,15 @@ class DecisionTreeModel(Classifier, Regressor):
         if self.variant == "XGBOOST":
             self.feature_converter = np.float32
             self.get_terminal_node = get_terminal_node_lt
+            self.label_dtype = np.float32
         elif self.variant == "LIGHTGBM":
             self.feature_converter = np.float64
             self.get_terminal_node = get_terminal_node_lte
+            self.label_dtype = np.float64
         elif self.variant == "SKLEARN":
             self.feature_converter = lambda x: np.float64(np.float32(x))
             self.get_terminal_node = get_terminal_node_lte
+            self.label_dtype = np.float64
 
     def init_tree(self, model_parameters):
         """ Loading serialized trees
@@ -128,7 +131,7 @@ class DecisionTreeModel(Classifier, Regressor):
         return [self._predict(data) for data in self.feature_converter(X)]
 
     def _predict(self, data):
-        return self.get_terminal_node(self.root, data).label
+        return self.label_dtype(self.get_terminal_node(self.root, data).label)
 
     def predict_proba(self, X):
         return [self._predict_proba(data) for data in X]
