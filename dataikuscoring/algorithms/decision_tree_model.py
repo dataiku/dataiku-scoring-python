@@ -42,7 +42,10 @@ class Node:
         self.missing_value = missing_value
 
     def is_missing(self, data):
-        return np.isnan(data[self.feature_idx]) if np.isnan(self.missing_value) else data[self.feature_idx] == self.missing_value
+        if np.isnan(self.missing_value):
+            return np.isnan(data[self.feature_idx])
+        else:
+            return data[self.feature_idx] == self.missing_value
 
 class DecisionTreeModel(Classifier, Regressor):
     """

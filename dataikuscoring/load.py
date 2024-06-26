@@ -115,8 +115,12 @@ def load_resources_from_resource_folder(resources_folder):
         xgboost_grid = json.load(f).get("xgboost_grid")
         if xgboost_grid is None:
             missing_value = 0
+        elif model_input_is_sparse:
+            missing_value = np.nan
+        # TODO: handle "impute_missing" and "missing" parameters along with Java scoring,
+        #       see https://app.shortcut.com/dataiku/story/188325/handle-missing-and-impute-missing-in-xgboost-export-scoring-both-python-and-java
         else:
-            missing_value = xgboost_grid.get("missing", 0.0) if not model_input_is_sparse else np.nan
+            missing_value = np.nan
 
     # Feature Selection
     selection_filename = os.path.join(resources_folder, "feature_selection.json")

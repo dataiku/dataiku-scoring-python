@@ -1,3 +1,5 @@
+import logging
+
 import numpy as np
 
 from dataikuscoring.processors import PREPROCESSORS
@@ -13,7 +15,7 @@ class Preprocessings:
         """
         PREPROCESSORS_DICT = {preprocessor.__name__: preprocessor for preprocessor in PREPROCESSORS}
         self.missing_value = resources["missing_value"]
-        print("Model missing value: {}".format(self.missing_value))
+        logging.info("Model missing value: {}".format(self.missing_value))
         self.number_of_feature_columns = len(resources["feature_columns"])
 
         # The order matters and is guaranteed by load_resources_from_resource_folder in load.py
