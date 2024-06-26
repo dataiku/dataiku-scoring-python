@@ -35,7 +35,7 @@ def get_default_pip_requirements():
              Calls to :func:`save_model()` and :func:`log_model()` produce a pip environment
              that, at minimum, contains these requirements.
     """
-    return [_get_pinned_requirement("dataiku-scoring"), "mlflow>=1.30.0,<2.0.0"]
+    return [_get_pinned_requirement("dataiku-scoring"), "mlflow>=1.30.0,<3.0.0"]
 
 
 def get_default_conda_env():
