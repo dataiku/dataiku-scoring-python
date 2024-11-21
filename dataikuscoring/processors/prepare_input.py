@@ -92,6 +92,6 @@ class PrepareInput:
                 if np.issubdtype(data.dtype, np.number):  # if data is not numeric check empty string
                     X_numeric[:, column] = data
                 else:  # None are converted to NaN, we have to convert empty strings
-                    X_numeric[:, column] = np.where(data.astype(str) == "", np.nan, data)
+                    X_numeric[:, column] = np.where(data.astype(str) == "", np.nan, data.astype('object'))
 
         return X_numeric, X_non_numeric
