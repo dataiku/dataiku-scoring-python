@@ -4,7 +4,6 @@ import gzip
 import shutil
 import tempfile
 import zipfile
-import pkg_resources
 import re
 import codecs
 import logging
@@ -166,9 +165,20 @@ def load_version(export_path):
                     return line.split("=")[-1].strip()
 
 
+def _get_major_package_version(package_name):
+    try:
+        from importlib.metadata import version
+        version_pkg_major = version(package_name).split(".")[0]
+    except ImportError:
+        import pkg_resources
+        version_pkg_major = pkg_resources.get_distribution(package_name).version.split(".")[0]
+    return version_pkg_major
+
+
 def check_version(export_path):
     version_major = load_version(export_path).split(".")[0]
-    version_pkg_major = pkg_resources.get_distribution("dataiku-scoring").version.split(".")[0]
+    version_pkg_major = _get_major_package_version("dataiku-scoring")
+
     # Compare major version
     if version_major > version_pkg_major:
         warnings.warn("Export file requires dataiku-scoring at version {} or above".format(version_major))
