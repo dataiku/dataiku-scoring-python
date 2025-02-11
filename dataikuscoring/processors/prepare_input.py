@@ -32,9 +32,9 @@ class PrepareInput:
         self.feature_columns = resources["feature_columns"]  # used in tests
 
         numeric_input = [column_name for column_name, column_type in resources["columns"]
-                         if column_type == "date" or resources["per_feature"][column_name]["type"] == "NUMERIC"]
+                         if column_type in ["date", "dateonly", "datetimenotz"] or resources["per_feature"][column_name]["type"] == "NUMERIC"]
         non_numeric_input = [column_name for column_name, column_type in resources["columns"]
-                             if column_type == "date" or resources["per_feature"][column_name]["type"] != "NUMERIC"]
+                             if column_type in ["date", "dateonly", "datetimenotz"] or resources["per_feature"][column_name]["type"] != "NUMERIC"]
 
         self.column_index_numeric = {
             column: index for (index, column) in enumerate(set(self.feature_columns + numeric_input))  # using set to have unicity
