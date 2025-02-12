@@ -156,7 +156,7 @@ def convert_date_features(imported_model_meta, input_df):
     Don't touch columns that are not declared as 'date' feature types.
     """
     for feature in imported_model_meta['features']:
-        if feature['type'] == 'date':
+        if feature['type'] in ["date", "dateonly", "datetimenotz"]:
             if pd.api.types.is_numeric_dtype(input_df[feature['name']].dtype):
                 input_df[feature['name']] = epoch_to_datetime(input_df[feature['name']], input_df[feature['name']])
             else:

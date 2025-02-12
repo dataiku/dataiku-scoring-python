@@ -27,8 +27,9 @@ class Derive(Preprocessor):
 
     def process(self, X_numeric, X_non_numeric):
         for i, column in enumerate(self.columns):
-            X_numeric[:, self.log_names[i]] = np.where(X_numeric[:, column] > 0, np.log(X_numeric[:, column] + 0.00000001), 0)
-            X_numeric[:, self.sqrt_names[i]] = np.where(X_numeric[:, column] > 0, np.sqrt(X_numeric[:, column]), 0)
+            # Propagate NaN with default 0 * X_numeric[:, column]
+            X_numeric[:, self.log_names[i]] = np.where(X_numeric[:, column] > 0, np.log(X_numeric[:, column] + 0.00000001), 0 * X_numeric[:, column])
+            X_numeric[:, self.sqrt_names[i]] = np.where(X_numeric[:, column] > 0, np.sqrt(X_numeric[:, column]), 0 * X_numeric[:, column])
             X_numeric[:, self.square_names[i]] = X_numeric[:, column] ** 2
 
         return X_numeric, X_non_numeric

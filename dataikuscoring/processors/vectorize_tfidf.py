@@ -31,10 +31,14 @@ class VectorizeTfidf(Preprocessor):
 
             self.vocabularies.append(voc)
             self.output_names.append(out)
+        self.unrecorded_value = parameters["unrecorded_value"]
 
     def process(self, X_numeric, X_non_numeric):
         for column, tokenizer, vocab, output_name in zip(self.columns, self.tokenizers, self.vocabularies, self.output_names):
             token_counts = [tokenizer.get_token_counts(text if text is not None else "") for text in X_non_numeric[:, column]]
+            # input matrix initialization
+            for output in output_name.values():
+                X_numeric[:, output] = self.unrecorded_value
             for (index, token_count) in enumerate(token_counts):
                 norm = 0.0
                 for token, count in token_count.items():
