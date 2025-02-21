@@ -4,6 +4,7 @@ from .common import Classifier, Regressor
 
 
 def get_terminal_node_lt(node, data):
+    # XGBoost
     current = node
     while not current.is_leaf:
         if current.is_missing(data):
@@ -16,9 +17,12 @@ def get_terminal_node_lt(node, data):
 
 
 def get_terminal_node_lte(node, data):
+    # Scikit-learn & LightGBM
     current = node
     while not current.is_leaf:
-        if data[current.feature_idx] <= current.threshold:
+        if current.is_missing(data):
+            current = current.left_child if current.missing_goes_left else current.right_child
+        elif data[current.feature_idx] <= current.threshold:
             current = current.left_child
         else:
             current = current.right_child
@@ -108,10 +112,15 @@ class DecisionTreeModel(Classifier, Regressor):
                 model_parameters["leaf_id"], model_parameters["label"])
         }
 
+        missing = model_parameters.get("missing")
+        if missing is None or len(missing) == 0:
+            list_missing_goes_left = [None] * len(model_parameters["node_id"])
+        else:
+            list_missing_goes_left = [v == "l" for v in missing]
         nodes_with_children = {
-            node_id: Node(feature_idx=feature, threshold=convert_threshold(threshold), is_leaf=False, missing_goes_left=missing=="l", missing_value=missing_value)
-            for node_id, feature, threshold, missing in zip(
-                model_parameters["node_id"], model_parameters["feature"], model_parameters["threshold"], model_parameters.get("missing", [None] * len(model_parameters["node_id"])))
+            node_id: Node(feature_idx=feature, threshold=convert_threshold(threshold), is_leaf=False, missing_goes_left=missing_goes_left, missing_value=missing_value)
+            for node_id, feature, threshold, missing_goes_left in zip(
+                model_parameters["node_id"], model_parameters["feature"], model_parameters["threshold"], list_missing_goes_left)
         }
 
         # Connect the nodes to  their children

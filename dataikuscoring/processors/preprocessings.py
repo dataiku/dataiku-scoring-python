@@ -14,12 +14,14 @@ class Preprocessings:
         :param resources:
         """
         PREPROCESSORS_DICT = {preprocessor.__name__: preprocessor for preprocessor in PREPROCESSORS}
+        self.unrecorded_value = resources["unrecorded_value"]
         self.missing_value = resources["missing_value"]
-        logging.info("Model missing value: {}".format(self.missing_value))
+        logging.info("Model unrecorded value: {}".format(self.unrecorded_value))
         self.number_of_feature_columns = len(resources["feature_columns"])
 
         # The order matters and is guaranteed by load_resources_from_resource_folder in load.py
-        self.processors = [PREPROCESSORS_DICT[preprocessor_name](dict({"missing_value": self.missing_value}, **parameters))
+        self.processors = [PREPROCESSORS_DICT[preprocessor_name](dict({"unrecorded_value":  self.unrecorded_value},
+                                                                      **parameters))
                            for preprocessor_name, parameters in resources["preprocessors"]]
 
 

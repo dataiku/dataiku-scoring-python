@@ -5,7 +5,7 @@ import setuptools
 long_description = (open('README.md').read() + '\n\n' +
                     open('HISTORY.txt').read())
 
-VERSION = "13.3.3"
+VERSION = "13.4.1"
 
 setuptools.setup(
     name='dataiku-scoring',

@@ -106,20 +106,18 @@ def load_resources_from_resource_folder(resources_folder):
             # Needs to be JSON serializable
             preprocessors.append((Preprocessor.__name__, parameters))
 
-    # XGBoost sparse matrices handling
-    with open(os.path.join(resources_folder, "iperf.json")) as f:
-        model_input_is_sparse = json.load(f).get("modelInputIsSparse", False)
+    # TODO: handle XGBoost "impute_missing" and "missing" parameters along with Java scoring,
+    #       see https://app.shortcut.com/dataiku/story/188325/handle-missing-and-impute-missing-in-xgboost-export-scoring-both-python-and-java
+    missing_value = np.nan
 
     with open(os.path.join(resources_folder, "rmodeling_params.json")) as f:
         xgboost_grid = json.load(f).get("xgboost_grid")
-        if xgboost_grid is None:
-            missing_value = 0
-        elif model_input_is_sparse:
-            missing_value = np.nan
-        # TODO: handle "impute_missing" and "missing" parameters along with Java scoring,
-        #       see https://app.shortcut.com/dataiku/story/188325/handle-missing-and-impute-missing-in-xgboost-export-scoring-both-python-and-java
+        if xgboost_grid is not None:
+            # For XGBoost models, unrecorded entries in sparse matrices are considered as missing
+            unrecorded_value = missing_value
         else:
-            missing_value = np.nan
+            # For Scikit-learn and LightGBM models, unrecorded entries in sparse matrices are considered 0 (scipy.sparse behaviour)
+            unrecorded_value = 0.
 
     # Feature Selection
     selection_filename = os.path.join(resources_folder, "feature_selection.json")
@@ -143,6 +141,7 @@ def load_resources_from_resource_folder(resources_folder):
         "preprocessors": preprocessors,
         "selection": selection,
         "drop_rows": drop_rows,
+        "unrecorded_value": unrecorded_value,
         "missing_value": missing_value,
         "feature_columns": feature_columns
     }
