@@ -2,6 +2,7 @@ import numpy as np
 
 from .decision_tree_model import DecisionTreeModel
 from .common import Regressor
+from ..utils import sigmoid32
 
 
 class GradientBoostingRegressor(Regressor):
@@ -13,6 +14,7 @@ class GradientBoostingRegressor(Regressor):
         self.shrinkage = self.prediction_dtype(model_parameters["shrinkage"])
         self.baseline = self.prediction_dtype(model_parameters["baseline"])
         self.gamma_regression = model_parameters.get("gamma_regression", False)
+        self.logistic_regression = model_parameters.get("logistic_regression", False)
         self.feature_converter = self.trees[0].feature_converter
 
     def predict(self, X):
@@ -21,6 +23,8 @@ class GradientBoostingRegressor(Regressor):
     def _predict(self, data):
         if self.gamma_regression:
             result = np.exp(np.sum([tree._predict(data) for tree in self.trees], dtype=self.prediction_dtype) * self.shrinkage) * self.baseline
+        elif self.logistic_regression:
+            result = sigmoid32(np.sum([tree._predict(data) for tree in self.trees], dtype=self.prediction_dtype) * self.shrinkage)
         elif self.prediction_dtype == np.float32:
             # Avoid np.sum to replicate XGBoost results
             p = np.float32(0.)

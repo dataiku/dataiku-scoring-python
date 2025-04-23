@@ -44,6 +44,9 @@ def mlflow_regression_predict_to_scoring_data(mlflow_model, imported_model_meta,
         shape = output.shape
         if len(shape) == 1:
             mlflow_raw_preds = output
+        elif len(shape) == 2 and shape[1] == 1:
+            logging.info("Unflattened 1D ndarray returned, reshaping it to a single dimension: (%s)" % (shape[0]))
+            mlflow_raw_preds = output.flatten()
         else:
             raise Exception("Can't handle model output of shape=%s" % (shape,))
     else:
