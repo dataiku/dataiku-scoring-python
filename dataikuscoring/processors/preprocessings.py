@@ -14,8 +14,9 @@ class Preprocessings:
         :param resources:
         """
         PREPROCESSORS_DICT = {preprocessor.__name__: preprocessor for preprocessor in PREPROCESSORS}
-        self.unrecorded_value = resources["unrecorded_value"]
         self.missing_value = resources["missing_value"]
+        # For models trained before DSS-13.4, `missing_value` was also used in place of `unrecorded_value`
+        self.unrecorded_value = resources.get("unrecorded_value", self.missing_value)
         logging.info("Model unrecorded value: {}".format(self.unrecorded_value))
         self.number_of_feature_columns = len(resources["feature_columns"])
 
