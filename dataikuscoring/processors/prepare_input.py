@@ -41,6 +41,8 @@ class PrepareInput:
         }
         self.column_index_non_numeric = {column: index for (index, column) in enumerate(non_numeric_input)}
 
+        self.categorical_columns = [column_name for column_name, _ in resources["columns"] if resources["per_feature"][column_name]["type"] == "CATEGORY"]
+
     def process(self, X):
         # Initialize numeric matrix
         X_numeric = IndexedMatrix(
@@ -84,7 +86,10 @@ class PrepareInput:
             #  but are not normalized yet
             if column in X_non_numeric.column_index:
                 if np.issubdtype(data.dtype, np.number):  # if data is numeric convert nan to None
-                    X_non_numeric[:, column] = np.where(np.isnan(data), None, data)
+                    if column in  self.categorical_columns :
+                        X_non_numeric[:, column] = np.where(np.isnan(data), None, data.astype(str))
+                    else :
+                        X_non_numeric[:, column] = np.where(np.isnan(data), None, data)
                 else:  # we have to convert empty string and nan to None
                     X_non_numeric[:, column] = np.where(data.astype(str) == "", None, data)
                     X_non_numeric[:, column] = np.where([x is np.nan for x in X_non_numeric[:, column]], None, X_non_numeric[:, column])
