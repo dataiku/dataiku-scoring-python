@@ -27,15 +27,19 @@ class PrepareInput:
 
     def __init__(self, resources):
 
-        self.input_column_names = [column_name for column_name, _ in resources["columns"]]
+        self.input_column_names = [column_name for column_name, _ in resources["columns"]] # all columns even REJECT columns
+        self.mandatory_input_column_names = [ column_name for column_name, _ in resources["columns"]
+            if resources["per_feature"].get(column_name, {}).get("role") == "INPUT"
+        ]
 
         self.feature_columns = resources["feature_columns"]  # used in tests
 
         numeric_input = [column_name for column_name, column_type in resources["columns"]
-                         if column_type in ["date", "dateonly", "datetimenotz"] or resources["per_feature"][column_name]["type"] == "NUMERIC"]
+                         if column_name in self.mandatory_input_column_names and
+                         (column_type in ["date", "dateonly", "datetimenotz"] or resources["per_feature"][column_name]["type"] == "NUMERIC")]
         non_numeric_input = [column_name for column_name, column_type in resources["columns"]
-                             if column_type in ["date", "dateonly", "datetimenotz"] or resources["per_feature"][column_name]["type"] != "NUMERIC"]
-
+                             if column_name in self.mandatory_input_column_names and
+                             (column_type in ["date", "dateonly", "datetimenotz"] or resources["per_feature"][column_name]["type"] != "NUMERIC")]
         self.column_index_numeric = {
             column: index for (index, column) in enumerate(set(self.feature_columns + numeric_input))  # using set to have unicity
         }
@@ -73,7 +77,7 @@ class PrepareInput:
             else:  # Type is List[Dict] because we handled validation in check_input_data
                 get_column_copy =  lambda X, index_column, column: np.array([x.get(column) for x in X])
         else:  # Type is Dataframe because we handled validation in check_input_data
-            missing_columns = set(self.input_column_names).difference(set(X.columns))
+            missing_columns = set(self.mandatory_input_column_names).difference(set(X.columns))
             if len(missing_columns) > 0:
                 raise ValueError("Missing column(s) in input DataFrame: {}".format(
                     ",".join(missing_columns)))
@@ -81,22 +85,23 @@ class PrepareInput:
 
         # Fill the input columns data into the right matrices
         for (index_column, column) in enumerate(self.input_column_names):
-            data = get_column_copy(X, index_column, column)
-            # important to check in non numeric first because dates can be in both
-            #  but are not normalized yet
-            if column in X_non_numeric.column_index:
-                if np.issubdtype(data.dtype, np.number):  # if data is numeric convert nan to None
-                    if column in  self.categorical_columns :
-                        X_non_numeric[:, column] = np.where(np.isnan(data), None, data.astype(str))
-                    else :
-                        X_non_numeric[:, column] = np.where(np.isnan(data), None, data)
-                else:  # we have to convert empty string and nan to None
-                    X_non_numeric[:, column] = np.where(data.astype(str) == "", None, data)
-                    X_non_numeric[:, column] = np.where([x is np.nan for x in X_non_numeric[:, column]], None, X_non_numeric[:, column])
-            else:
-                if np.issubdtype(data.dtype, np.number):  # if data is not numeric check empty string
-                    X_numeric[:, column] = data
-                else:  # None are converted to NaN, we have to convert empty strings
-                    X_numeric[:, column] = np.where(data.astype(str) == "", np.nan, data.astype('object'))
+            if column in self.mandatory_input_column_names:
+                data = get_column_copy(X, index_column, column)
+                # important to check in non numeric first because dates can be in both
+                #  but are not normalized yet
+                if column in X_non_numeric.column_index:
+                    if np.issubdtype(data.dtype, np.number):  # if data is numeric convert nan to None
+                        if column in self.categorical_columns :
+                            X_non_numeric[:, column] = np.where(np.isnan(data), None, data.astype(str))
+                        else :
+                            X_non_numeric[:, column] = np.where(np.isnan(data), None, data)
+                    else:  # we have to convert empty string and nan to None
+                        X_non_numeric[:, column] = np.where(data.astype(str) == "", None, data)
+                        X_non_numeric[:, column] = np.where([x is np.nan for x in X_non_numeric[:, column]], None, X_non_numeric[:, column])
+                else:
+                    if np.issubdtype(data.dtype, np.number):  # if data is not numeric check empty string
+                        X_numeric[:, column] = data
+                    else:  # None are converted to NaN, we have to convert empty strings
+                        X_numeric[:, column] = np.where(data.astype(str) == "", np.nan, data.astype('object'))
 
         return X_numeric, X_non_numeric
