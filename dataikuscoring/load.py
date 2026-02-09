@@ -136,7 +136,7 @@ def load_resources_from_resource_folder(resources_folder):
         selection = {"method": "ALL", "selection_params": None}
 
     # Predefine final feature_columns
-    if selection["method"] == "PCA":
+    if selection["method"] in ["PCA", "ICA"]:
         feature_columns = selection["selection_params"]["input_names"]
     else:
         feature_columns = meta["columns"]

@@ -17,6 +17,11 @@ class Selection:
 
             if self.selection_params["explained_variance"] is not None:
                 self.explained_standard_deviations = [x**0.5 for x in self.selection_params["explained_variance"]]
+        elif self.method == "ICA":
+            self.process = self.process_dense
+            self.mixing = np.array(self.selection_params["mixing"])
+            self.means = self.selection_params.get("means")
+            self.input_names = self.selection_params["input_names"]
 
     def process_sparse(self, X_numeric):
         v = np.where(np.isnan(X_numeric[:, self.feature_columns]), np.nan, X_numeric[:, self.feature_columns])
@@ -27,9 +32,10 @@ class Selection:
         if self.means:
             v -= self.means
 
-        d = np.dot(v, self.rot)
+        transformation = self.mixing if self.method == "ICA" else self.rot
+        d = np.dot(v, transformation)
 
-        if self.explained_standard_deviations:
+        if self.method == "PCA" and self.explained_standard_deviations:
             d /= self.explained_standard_deviations
 
         return d
@@ -37,7 +43,7 @@ class Selection:
     def select(self, X_numeric, number_of_columns):
         if self.method in ["DROP", "ALL"]:
             return X_numeric[:, self.feature_columns]
-        elif self.method == "PCA":
+        elif self.method == "PCA" or self.method == "ICA":
             return self.process(X_numeric)
 
     def __repr__(self):
