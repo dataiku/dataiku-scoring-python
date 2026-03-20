@@ -33,6 +33,14 @@ def escape(s, pattern="[^0-9a-zA-Z]"):
     )
 
 
+def get_version_info(resources_folder):
+    version_info_file_path = os.path.join(resources_folder, "version_info.json")
+    if os.path.exists(version_info_file_path):
+        with open(version_info_file_path) as version_info_file_path:
+            version_info = json.load(version_info_file_path)
+            return int(version_info.get("trainedWithDSSConfVersion", 0))
+    return 0
+
 def load_resources_from_resource_folder(resources_folder):
 
     if os.path.exists(resources_folder + "/mlflow_imported_model.json"):
@@ -112,7 +120,7 @@ def load_resources_from_resource_folder(resources_folder):
 
     with open(os.path.join(resources_folder, "rmodeling_params.json")) as f:
         xgboost_grid = json.load(f).get("xgboost_grid")
-        if xgboost_grid is not None:
+        if xgboost_grid is not None and get_version_info(resources_folder)>=13400:
             # For XGBoost models, unrecorded entries in sparse matrices are considered as missing
             unrecorded_value = missing_value
         else:
@@ -128,7 +136,7 @@ def load_resources_from_resource_folder(resources_folder):
         selection = {"method": "ALL", "selection_params": None}
 
     # Predefine final feature_columns
-    if selection["method"] == "PCA":
+    if selection["method"] in ["PCA", "ICA"]:
         feature_columns = selection["selection_params"]["input_names"]
     else:
         feature_columns = meta["columns"]
