@@ -3,12 +3,26 @@ import numpy as np
 from .common import Classifier, Regressor
 
 
+SPLIT_KIND_THRESHOLD = "threshold"
+SPLIT_KIND_CATEGORY_SET = "category_set"
+UNSEEN_CATEGORY_VALUE = -1.0
+
+
 def get_terminal_node_lt(node, data):
     # XGBoost
     current = node
     while not current.is_leaf:
         if current.is_missing(data):
             current = current.left_child if current.missing_goes_left else current.right_child
+        elif current.split_kind == SPLIT_KIND_CATEGORY_SET:
+            # XGBoost routes matching categories to the right child.
+            # Unseen encoded categories are treated as missing values and follow missing_goes_left when available.
+            if data[current.feature_idx] == UNSEEN_CATEGORY_VALUE and current.missing_goes_left is not None:
+                current = current.left_child if current.missing_goes_left else current.right_child
+            elif current.has_category(data):
+                current = current.right_child
+            else:
+                current = current.left_child
         elif data[current.feature_idx] < current.threshold:
             current = current.left_child
         else:
@@ -22,6 +36,14 @@ def get_terminal_node_lte(node, data):
     while not current.is_leaf:
         if current.is_missing(data):
             current = current.left_child if current.missing_goes_left else current.right_child
+        elif current.split_kind == SPLIT_KIND_CATEGORY_SET:
+            # LightGBM routes matching categories to the left child and treats unseen encoded categories as missing.
+            if data[current.feature_idx] == UNSEEN_CATEGORY_VALUE and current.missing_goes_left is not None:
+                current = current.left_child if current.missing_goes_left else current.right_child
+            elif current.has_category(data):
+                current = current.left_child
+            else:
+                current = current.right_child
         elif data[current.feature_idx] <= current.threshold:
             current = current.left_child
         else:
@@ -35,7 +57,9 @@ class Node:
     label: the 'value' of the node
     """
 
-    def __init__(self, feature_idx=None, threshold=np.nan, left_child=None, right_child=None, label=None, is_leaf=None, missing_goes_left=None, missing_value=np.nan):
+    def __init__(self, feature_idx=None, threshold=np.nan, left_child=None, right_child=None, label=None,
+                 is_leaf=None, missing_goes_left=None, missing_value=np.nan, split_kind=SPLIT_KIND_THRESHOLD,
+                 category_set=None):
         self.label = label
         self.feature_idx = feature_idx
         self.threshold = threshold
@@ -44,12 +68,17 @@ class Node:
         self.is_leaf = is_leaf
         self.missing_goes_left = missing_goes_left
         self.missing_value = missing_value
+        self.split_kind = split_kind
+        self.category_set = None if category_set is None else frozenset(float(v) for v in category_set)
 
     def is_missing(self, data):
         if np.isnan(self.missing_value):
             return np.isnan(data[self.feature_idx])
         else:
             return data[self.feature_idx] == self.missing_value
+
+    def has_category(self, data):
+        return float(data[self.feature_idx]) in self.category_set
 
 class DecisionTreeModel(Classifier, Regressor):
     """
@@ -77,15 +106,15 @@ class DecisionTreeModel(Classifier, Regressor):
     def __init__(self, model_parameters):
         self.init_tree(model_parameters)
         if self.variant == "XGBOOST":
-            self.feature_converter = np.float32
+            self.feature_converter = lambda x: np.asarray(x, dtype=np.float32)
             self.get_terminal_node = get_terminal_node_lt
             self.label_dtype = np.float32
         elif self.variant == "LIGHTGBM":
-            self.feature_converter = np.float64
+            self.feature_converter = lambda x: np.asarray(x, dtype=np.float64)
             self.get_terminal_node = get_terminal_node_lte
             self.label_dtype = np.float64
         elif self.variant == "SKLEARN":
-            self.feature_converter = lambda x: np.float64(np.float32(x))
+            self.feature_converter = lambda x: np.asarray(x, dtype=np.float32).astype(np.float64)
             self.get_terminal_node = get_terminal_node_lte
             self.label_dtype = np.float64
 
@@ -117,10 +146,29 @@ class DecisionTreeModel(Classifier, Regressor):
             list_missing_goes_left = [None] * len(model_parameters["node_id"])
         else:
             list_missing_goes_left = [v == "l" for v in missing]
+        split_kinds = model_parameters.get("split_kind")
+        if split_kinds is None or len(split_kinds) == 0:
+            split_kinds = [SPLIT_KIND_THRESHOLD] * len(model_parameters["node_id"])
+        category_sets = model_parameters.get("category_set")
+        if category_sets is None or len(category_sets) == 0:
+            category_sets = [None] * len(model_parameters["node_id"])
         nodes_with_children = {
-            node_id: Node(feature_idx=feature, threshold=convert_threshold(threshold), is_leaf=False, missing_goes_left=missing_goes_left, missing_value=missing_value)
-            for node_id, feature, threshold, missing_goes_left in zip(
-                model_parameters["node_id"], model_parameters["feature"], model_parameters["threshold"], list_missing_goes_left)
+            node_id: Node(
+                feature_idx=feature,
+                threshold=convert_threshold(threshold) if split_kind == SPLIT_KIND_THRESHOLD else threshold,
+                is_leaf=False,
+                missing_goes_left=missing_goes_left,
+                missing_value=missing_value,
+                split_kind=split_kind,
+                category_set=category_set
+            )
+            for node_id, feature, threshold, missing_goes_left, split_kind, category_set in zip(
+                model_parameters["node_id"],
+                model_parameters["feature"],
+                model_parameters["threshold"],
+                list_missing_goes_left,
+                split_kinds,
+                category_sets)
         }
 
         # Connect the nodes to  their children
@@ -129,8 +177,12 @@ class DecisionTreeModel(Classifier, Regressor):
             node.right_child = nodes_with_children.get(node_id * 2 + 2, leaves.get(node_id * 2 + 2))
 
             # Validation
-            if node.left_child is None or node.right_child is None or np.isnan(node.threshold):
-                raise ValueError("Tree node is not valid")
+            if node.left_child is None or node.right_child is None:
+                raise ValueError("Tree split node is missing a child")
+            if node.split_kind == SPLIT_KIND_THRESHOLD and np.isnan(node.threshold):
+                raise ValueError("Threshold split node is missing a threshold")
+            if node.split_kind == SPLIT_KIND_CATEGORY_SET and node.category_set is None:
+                raise ValueError("Category-set split node is missing a category_set")
             if (node.left_child.is_leaf and node.left_child.label is None) or (
                     node.right_child.is_leaf and node.right_child.label is None):
                 raise ValueError("Leaf node does not have a label")
