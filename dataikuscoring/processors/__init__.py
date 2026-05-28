@@ -13,6 +13,7 @@ from .vectorize_word_count import VectorizeWordCount
 from .vectorize_tfidf import VectorizeTfidf
 from .vectors_unfold import VectorsUnfold
 from .categorical_encode import CategoricalEncode
+from .raw_categorical_encode import RawCategoricalEncode
 from .num_num_interaction import NumericalNumericalInteractions
 from .num_cat_interaction import NumericalCategoricalInteractions
 from .cat_cat_interaction import CategoricalCategoricalInteractions
@@ -32,6 +33,7 @@ PREPROCESSORS = [
     VectorizeWordCount,
     VectorizeTfidf,
     VectorsUnfold,
+    RawCategoricalEncode,
     CategoricalEncode,
     NumericalNumericalInteractions,
     NumericalCategoricalInteractions,
