@@ -19,8 +19,10 @@ class CategoricalCategoricalInteractions(Preprocessor):
 
         for col1, col2, values in zip(self.column_1, self.column_2, self.values):
             for value_col1, value_col2 in values:
-                mask = (data[:, columns.index(col1)] == value_col1) * (data[:, columns.index(col2)] == value_col2)
-                X_numeric[:, "interaction:{}:{}:{}:{}".format(col1, col2, value_col1, value_col2)] = np.where(mask, 1, self.unrecorded_value)
+                output_name = "interaction:{}:{}:{}:{}".format(col1, col2, value_col1, value_col2)
+                if X_numeric.has_column(output_name):
+                    mask = (data[:, columns.index(col1)] == value_col1) * (data[:, columns.index(col2)] == value_col2)
+                    X_numeric[:, output_name] = np.where(mask, 1, self.unrecorded_value)
 
         return X_numeric, X_non_numeric
 

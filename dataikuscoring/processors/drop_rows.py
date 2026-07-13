@@ -16,7 +16,7 @@ class DropRows:
         for column in self.columns:
             # important to check in non numeric first because dates can be in both
             #  but are not normalized yet
-            if column in X_non_numeric.column_index:
+            if X_non_numeric.has_column(column):
                 rows_to_compute *= np.where(X_non_numeric[:, column] == None, False, True)
             else:
                 rows_to_compute *= np.where(np.isnan(X_numeric[:, column]), False, True)

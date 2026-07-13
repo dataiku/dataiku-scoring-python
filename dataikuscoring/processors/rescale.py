@@ -15,7 +15,8 @@ class Rescale(Preprocessor):
 
     def process(self, X_numeric, X_non_numeric):
         for column, (shift, inv_scale) in self.rescaler.items():
-            X_numeric[:, column] = (X_numeric[:, column] - shift) * inv_scale
+            if X_numeric.has_column(column):
+                X_numeric[:, column] = (X_numeric[:, column] - shift) * inv_scale
         return X_numeric, X_non_numeric
 
     def __repr__(self):

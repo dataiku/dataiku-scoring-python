@@ -18,7 +18,7 @@ class Impute(Preprocessor):
     def process(self, X_numeric, X_non_numeric):
         for column, impute_value in self.impute_values.items():
             # Important to check on non numeric first since it can be in both (and not encoded at this step)
-            if column in X_non_numeric.column_index:
+            if X_non_numeric.has_column(column):
                 X_non_numeric[:, column] = np.where(X_non_numeric[:, column] == None, impute_value, X_non_numeric[:, column])
             else:
                 X_numeric[:, column] = np.where(np.isnan(X_numeric[:, column]), impute_value, X_numeric[:, column])

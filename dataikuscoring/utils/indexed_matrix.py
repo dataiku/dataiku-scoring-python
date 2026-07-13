@@ -21,6 +21,15 @@ class IndexedMatrix:
         assert set(column_index.values()) == set(range(matrix.shape[1])), (
             "Index and matrix mismatch, values expected to match range({}) exactly".format(matrix.shape[1]))
 
+    def has_column(self, column):
+        return column in self.column_index
+
+    def existing_columns(self, columns):
+        return [column for column in columns if self.has_column(column)]
+
+    def existing_column_indices(self, columns):
+        return [index for index, column in enumerate(columns) if self.has_column(column)]
+
     def _remap_key(self, key):
         """In case of column selection, remap the columns using self.column_index
 
