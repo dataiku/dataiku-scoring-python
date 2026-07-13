@@ -13,8 +13,14 @@ class VectorsUnfold(Preprocessor):
 
     def process(self, X_numeric, X_non_numeric):
         for column, vector_length in self.vector_lengths.items():
+            kept_indices = [
+                i for i in range(vector_length)
+                if X_numeric.has_column("unfold:{}:{}".format(column, i))
+            ]
+            if len(kept_indices) == 0:
+                continue
             parsed_arrays = np.array([json.loads(x) for x in X_non_numeric[:, column]], dtype=np.float64)
-            X_numeric[:, ["unfold:{}:{}".format(column, i) for i in range(vector_length)]] = parsed_arrays
+            X_numeric[:, ["unfold:{}:{}".format(column, i) for i in kept_indices]] = parsed_arrays[:, kept_indices]
         return X_numeric, X_non_numeric
 
     def __repr__(self):

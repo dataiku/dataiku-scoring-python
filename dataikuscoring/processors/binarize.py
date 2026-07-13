@@ -13,7 +13,13 @@ class Binarize(Preprocessor):
         self.thresholds = parameters["thresholds"]
 
     def process(self, X_numeric, X_non_numeric):
-        X_numeric[:, self.output_columns] = np.where(X_numeric[:, self.columns] > self.thresholds, 1.0, 0.0)
+        kept = [
+            (self.columns[index], self.output_columns[index], self.thresholds[index])
+            for index in X_numeric.existing_column_indices(self.output_columns)
+        ]
+        if len(kept) > 0:
+            columns, output_columns, thresholds = zip(*kept)
+            X_numeric[:, list(output_columns)] = np.where(X_numeric[:, list(columns)] > thresholds, 1.0, 0.0)
         return X_numeric, X_non_numeric
 
     def __repr__(self):

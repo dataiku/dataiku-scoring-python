@@ -35,9 +35,16 @@ class VectorizeTfidf(Preprocessor):
 
     def process(self, X_numeric, X_non_numeric):
         for column, tokenizer, vocab, output_name in zip(self.columns, self.tokenizers, self.vocabularies, self.output_names):
+            kept_output_names = {
+                token: output
+                for token, output in output_name.items()
+                if X_numeric.has_column(output)
+            }
+            if len(kept_output_names) == 0:
+                continue
             token_counts = [tokenizer.get_token_counts(text if text is not None else "") for text in X_non_numeric[:, column]]
             # input matrix initialization
-            for output in output_name.values():
+            for output in kept_output_names.values():
                 X_numeric[:, output] = self.unrecorded_value
             for (index, token_count) in enumerate(token_counts):
                 norm = 0.0
@@ -62,12 +69,12 @@ class VectorizeTfidf(Preprocessor):
                 norm = 1.0 / norm
 
                 for token, count in token_count.items():
-                    if token not in vocab:
+                    if token not in kept_output_names:
                         continue
 
                     idf = vocab[token]
                     value = norm * count * idf
-                    X_numeric[index, output_name[token]] = value
+                    X_numeric[index, kept_output_names[token]] = value
 
         return X_numeric, X_non_numeric
 

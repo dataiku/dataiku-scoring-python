@@ -22,6 +22,8 @@ class RawCategoricalEncode(Preprocessor):
 
     def process(self, X_numeric, X_non_numeric):
         for column in self.columns:
+            if not X_numeric.has_column(column):
+                continue
             category_values = list(self.category_levels[column])
             category_to_code = {
                 category_value: float(category_code)

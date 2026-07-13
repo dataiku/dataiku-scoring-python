@@ -16,10 +16,13 @@ class NumericalNumericalInteractions(Preprocessor):
         for column_1, column_2, rescale, shift, inv_scale in zip(
                 self.column_1, self.column_2, self.rescale, self.shift, self.inv_scale
         ):
+            output_name = "interaction:{}:{}".format(column_1, column_2)
+            if not X_numeric.has_column(output_name):
+                continue
             values = X_numeric[:, column_1] * X_numeric[:, column_2]
             if rescale:
                 values = (values - shift) * inv_scale
-            X_numeric[:, "interaction:{}:{}".format(column_1, column_2)] = values
+            X_numeric[:, output_name] = values
 
         return X_numeric, X_non_numeric
 

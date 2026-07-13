@@ -89,7 +89,7 @@ class PrepareInput:
                 data = get_column_copy(X, index_column, column)
                 # important to check in non numeric first because dates can be in both
                 #  but are not normalized yet
-                if column in X_non_numeric.column_index:
+                if X_non_numeric.has_column(column):
                     if np.issubdtype(data.dtype, np.number):  # if data is numeric convert nan to None
                         if column in self.categorical_columns :
                             X_non_numeric[:, column] = np.where(np.isnan(data), None, data.astype(str))
