@@ -14,11 +14,15 @@ class Flag(Preprocessor):
         self.unrecorded_value = parameters["unrecorded_value"]
 
     def process(self, X_numeric, X_non_numeric):
-        for (column, output_name) in zip(self.columns, self.output_names):
-            if column in X_numeric.column_index:
-                X_numeric[:, output_name] = np.where(np.isnan(X_numeric[:, column]), self.unrecorded_value, 1)
+        for input_column, output_feature_name in zip(self.columns, self.output_names):
+            if not X_numeric.has_column(output_feature_name):
+                # Feature reduction may drop this generated output feature, so there is no allocated column to write.
+                continue
+            if X_numeric.has_column(input_column):
+                X_numeric[:, output_feature_name] = np.where(np.isnan(X_numeric[:, input_column]), self.unrecorded_value, 1)
             else:
-                X_numeric[:, output_name] = np.where(X_non_numeric[:, column] == None, self.unrecorded_value, 1)
+                # Non-numeric input columns live in X_non_numeric; their generated flag output is numeric.
+                X_numeric[:, output_feature_name] = np.where(X_non_numeric[:, input_column] == None, self.unrecorded_value, 1)
 
         return X_numeric, X_non_numeric
 

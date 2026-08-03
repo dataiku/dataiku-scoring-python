@@ -32,15 +32,21 @@ class DatetimeCyclical(Preprocessor):
     def process(self, X_numeric, X_non_numeric):
         origin = datetime.datetime(1900, 1, 1, 0, 0, 0)
         for column, periods in self.mapping.items():
+            output_names_by_period = {}
+            for period in periods:
+                prefix = "datetime_cyclical:{}:{}:".format(column, period.lower())
+                output_names_by_period[period] = (prefix + "sin", prefix + "cos")
+
             timestamps = X_numeric[:, column] * 1000.0
             dates = [origin + datetime.timedelta(milliseconds=timestamp) for timestamp in timestamps]
-
             for period in periods:
+                sin_output_name, cos_output_name = output_names_by_period[period]
                 second_subperiods = np.array([(date - self.truncate_datetime(period, date)).total_seconds() for date in dates])
                 trigo_args = second_subperiods * 2 * 3.141592653589793 / PERIOD[period]
-                prefix = "datetime_cyclical:{}:{}:".format(column, period.lower())
-                X_numeric[:, prefix + "sin"] = np.sin(trigo_args)
-                X_numeric[:, prefix + "cos"] = np.cos(trigo_args)
+                if X_numeric.has_column(sin_output_name):
+                    X_numeric[:, sin_output_name] = np.sin(trigo_args)
+                if X_numeric.has_column(cos_output_name):
+                    X_numeric[:, cos_output_name] = np.cos(trigo_args)
 
         return X_numeric, X_non_numeric
 

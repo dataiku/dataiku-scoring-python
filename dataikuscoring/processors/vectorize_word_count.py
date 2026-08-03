@@ -21,16 +21,23 @@ class VectorizeWordCount(Preprocessor):
 
     def process(self, X_numeric, X_non_numeric):
         for column, tokenizer, vocab in zip(self.columns, self.tokenizers, self.vocabulary):
+            kept_vocab = {
+                token for token in vocab
+                if X_numeric.has_column("countvec:{}:{}".format(column, token))
+            }
+            if len(kept_vocab) == 0:
+                continue
             token_counts = [tokenizer.get_token_counts(text if text is not None else "") for text in X_non_numeric[:, column]]
             # input matrix initialization
             tokens = set()
             for token_count in token_counts:
                 tokens.update(token_count.keys())
             for token in tokens:
-                X_numeric[:, "countvec:{}:{}".format(column, token)] = self.unrecorded_value
+                if token in kept_vocab:
+                    X_numeric[:, "countvec:{}:{}".format(column, token)] = self.unrecorded_value
             for (index, token_count) in enumerate(token_counts):
                 for token, count in token_count.items():
-                    if token in vocab:
+                    if token in kept_vocab:
                         X_numeric[index, "countvec:{}:{}".format(column, token)] = count
         return X_numeric, X_non_numeric
 
