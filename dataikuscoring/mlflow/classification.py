@@ -188,7 +188,7 @@ def mlflow_classification_predict_to_scoring_data(mlflow_model, imported_model_m
         logger.info("MLflow outputs integers, converting")
         preds = pd.Series(mlflow_raw_preds)
         pred_df = pd.DataFrame({"prediction": mlflow_raw_preds})
-        pred_df["prediction"].replace(int_to_label_map, inplace=True)
+        pred_df["prediction"] = pred_df["prediction"].astype(object).replace(int_to_label_map)
     elif (isinstance(first_value, float) or isinstance(first_value, np.floating)) and \
             imported_model_meta["predictionType"] == "BINARY_CLASSIFICATION":
         # only a column of floats ... probably prediction of class 1
@@ -223,7 +223,7 @@ def mlflow_classification_predict_to_scoring_data(mlflow_model, imported_model_m
             preds = (probas_one > threshold).astype(int)
             pred_df = pd.DataFrame({"prediction": preds})
             logger.debug("Computed pred df %s" % pred_df)
-            pred_df["prediction"].replace(int_to_label_map, inplace=True)
+            pred_df["prediction"] = pred_df["prediction"].astype(object).replace(int_to_label_map)
             logger.info("Computed cleanpred df %s" % pred_df["prediction"].dtype)
 
     try:
@@ -238,7 +238,7 @@ def mlflow_classification_predict_to_scoring_data(mlflow_model, imported_model_m
         exception_with_cause.__cause__ = e
         raise exception_with_cause
 
-    if probas is not None and np.isnan(probas.to_numpy()).any():
+    if probas is not None and np.isnan(probas.fillna(np.nan).to_numpy(dtype=float)).any():
         raise Exception("MLflow model predicted NaN probabilities")
 
     logger.debug("Final pred_df: %s " % pred_df)

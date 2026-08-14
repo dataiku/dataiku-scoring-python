@@ -1,7 +1,7 @@
 import numpy as np
 
 from ..utils import IndexedMatrix
-
+from ..utils.pandas_compat import to_numpy
 
 class PrepareInput:
 
@@ -64,6 +64,10 @@ class PrepareInput:
 
         get_column_copy = None
         if isinstance(X, (list, np.ndarray)):  # type is List[List] or numpy array or List[dict]
+            def is_missing(value):
+                is_nat = isinstance(value, (np.datetime64, np.timedelta64)) and np.isnat(value)
+                return value is None or value is np.nan or is_nat
+
             data = X[0]
             if not isinstance(data, dict):  # type is List[List] or numpy array
                 if isinstance(data, (list, np.ndarray)):
@@ -77,11 +81,20 @@ class PrepareInput:
             else:  # Type is List[Dict] because we handled validation in check_input_data
                 get_column_copy =  lambda X, index_column, column: np.array([x.get(column) for x in X])
         else:  # Type is Dataframe because we handled validation in check_input_data
+            try:
+                import pandas as pd
+            except ImportError:
+                raise NotImplementedError("pandas is required when scoring a pandas.DataFrame")
+            is_missing = pd.isna
             missing_columns = set(self.mandatory_input_column_names).difference(set(X.columns))
             if len(missing_columns) > 0:
                 raise ValueError("Missing column(s) in input DataFrame: {}".format(
                     ",".join(missing_columns)))
-            get_column_copy = lambda X, index_column, column: X[column].values
+            def get_column_copy(X, index_column, column):
+                series = X[column]
+                if pd.api.types.is_extension_array_dtype(series) and pd.api.types.is_numeric_dtype(series):
+                    return to_numpy(series, dtype=np.float64, na_value=np.nan)
+                return to_numpy(series)
 
         # Fill the input columns data into the right matrices
         for (index_column, column) in enumerate(self.input_column_names):
@@ -95,9 +108,10 @@ class PrepareInput:
                             X_non_numeric[:, column] = np.where(np.isnan(data), None, data.astype(str))
                         else :
                             X_non_numeric[:, column] = np.where(np.isnan(data), None, data)
-                    else:  # we have to convert empty string and nan to None
-                        X_non_numeric[:, column] = np.where(data.astype(str) == "", None, data)
-                        X_non_numeric[:, column] = np.where([x is np.nan for x in X_non_numeric[:, column]], None, X_non_numeric[:, column])
+                    else:  # Convert empty strings and missing values to None
+                        X_non_numeric[:, column] = [
+                            None if is_missing(value) or value == "" else value for value in data
+                        ]
                 else:
                     if np.issubdtype(data.dtype, np.number):  # if data is not numeric check empty string
                         X_numeric[:, column] = data

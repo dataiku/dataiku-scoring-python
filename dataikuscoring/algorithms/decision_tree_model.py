@@ -59,7 +59,7 @@ class Node:
 
     def __init__(self, feature_idx=None, threshold=np.nan, left_child=None, right_child=None, label=None,
                  is_leaf=None, missing_goes_left=None, missing_value=np.nan, split_kind=SPLIT_KIND_THRESHOLD,
-                 category_set=None):
+                 category_set=None, n_node_samples=None):
         self.label = label
         self.feature_idx = feature_idx
         self.threshold = threshold
@@ -70,6 +70,8 @@ class Node:
         self.missing_value = missing_value
         self.split_kind = split_kind
         self.category_set = None if category_set is None else frozenset(float(v) for v in category_set)
+        # only populated for Isolation Forest leaves (used by its path-length anomaly score); None otherwise
+        self.n_node_samples = n_node_samples
 
     def is_missing(self, data):
         if np.isnan(self.missing_value):
@@ -136,9 +138,14 @@ class DecisionTreeModel(Classifier, Regressor):
         missing_value = model_parameters.get("missing_value", np.nan)
 
         convert_threshold = np.float32 if self.variant == "XGBOOST" else np.float64
+        # n_node_samples is present only for Isolation Forest trees; aligned with leaf_id when present
+        leaf_n_node_samples = model_parameters.get("n_node_samples")
+        if leaf_n_node_samples is None or len(leaf_n_node_samples) == 0:
+            leaf_n_node_samples = [None] * len(model_parameters["leaf_id"])
         leaves = {
-            leaf_id: Node(label=label, is_leaf=True, missing_value=missing_value) for leaf_id, label in zip(
-                model_parameters["leaf_id"], model_parameters["label"])
+            leaf_id: Node(label=label, is_leaf=True, missing_value=missing_value, n_node_samples=n_node_samples)
+            for leaf_id, label, n_node_samples in zip(
+                model_parameters["leaf_id"], model_parameters["label"], leaf_n_node_samples)
         }
 
         missing = model_parameters.get("missing")

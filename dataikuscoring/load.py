@@ -157,7 +157,15 @@ def load_resources_from_resource_folder(resources_folder):
     user_meta_filename = os.path.join(resources_folder, "user_meta.json")
     if os.path.isfile(user_meta_filename):
         with open(user_meta_filename) as f:
-            resources["threshold"] = json.load(f).get("activeClassifierThreshold", 0.5)
+            user_meta = json.load(f)
+        resources["threshold"] = user_meta.get("activeClassifierThreshold", 0.5)
+        # User cluster renames (intrinsic cluster name -> user-chosen name). Mirrors the DSS python and java
+        # engines (reg_scoring_recipe / Build.remapClusterNames) so optimized scoring returns the same
+        # cluster_labels after a rename. Empty/absent for non-clustering models.
+        resources["cluster_name_map"] = {
+            cluster_id: cluster_data["name"]
+            for cluster_id, cluster_data in user_meta.get("clusterMetas", {}).items()
+        }
 
     return resources
 
@@ -247,11 +255,17 @@ def create_model(resources):
             algorithm_name = "MLP_REGRESSOR"
         else:
             algorithm_name = "MLP_CLASSIFIER"
+    # Apply user cluster renames to the intrinsic cluster names, mirroring the DSS python/java engines.
+    # No-op for non-clustering models (cluster_name_map is empty).
+    classes = resources["meta"].get("classes")
+    cluster_name_map = resources.get("cluster_name_map")
+    if classes is not None and cluster_name_map:
+        classes = [cluster_name_map.get(name, name) for name in classes]
     parameters = {
         "prepare_input": PrepareInput(resources),
         "algorithm": ALGORITHMS[algorithm_name](dict({"missing_value": resources["missing_value"]}, **resources["model_parameters"])),
         "preprocessings": Preprocessings(resources),
-        "classes": resources["meta"].get("classes"),
+        "classes": classes,
         "calibration": Calibrator(resources),
         "drop_rows": DropRows(resources)
     }

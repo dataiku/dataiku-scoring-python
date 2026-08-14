@@ -87,7 +87,13 @@ class AbstractPredictionResult(object):
 class PredictionResult(AbstractPredictionResult):
 
     def as_dataframe(self, for_json_serialization=False):
-        prediction_df = pd.DataFrame({PREDICTION: self.preds})
+        if self.multi_target_variables:
+            prediction_df = pd.DataFrame(
+                self.preds,
+                columns=["{}_{}".format(PREDICTION, target) for target in self.multi_target_variables]
+            )
+        else:
+            prediction_df = pd.DataFrame({PREDICTION: self.preds})
         if not self.has_prediction_intervals():
             return prediction_df
         intervals = self.prediction_intervals
@@ -99,13 +105,14 @@ class PredictionResult(AbstractPredictionResult):
             prediction_df[PREDICTION_INTERVAL_UPPER] = intervals[:, 1]
         return prediction_df
 
-    def __init__(self, preds, prediction_intervals=None):
+    def __init__(self, preds, prediction_intervals=None, multi_target_variables=None):
         """
         :type preds: np.ndarray
         :type prediction_intervals: np.ndarray
         """
         self._preds = preds
         self._prediction_intervals = prediction_intervals
+        self.multi_target_variables = multi_target_variables
 
     @property
     def prediction_intervals(self):
@@ -146,7 +153,7 @@ class PredictionResult(AbstractPredictionResult):
             intervals_concat = np.concatenate([pr._prediction_intervals for pr in prediction_results])
         else:
             intervals_concat = None
-        return PredictionResult(preds_concat, intervals_concat)
+        return PredictionResult(preds_concat, intervals_concat, multi_target_variables=prediction_results[0].multi_target_variables)
 
 
 class ClassificationPredictionResult(AbstractPredictionResult):
