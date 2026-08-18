@@ -36,18 +36,20 @@ def multinomial_probabilities(dec):
 
 
 def modified_huber_probabilities(dec):
-    p = 0.5 * (1 + np.minimum(1, np.maximum(-1, dec)))
+    dec = np.asarray(dec, dtype=float)
+    p = 0.5 * (1 + np.clip(dec, -1, 1))
 
-    if len(dec[0]) == 2:
+    if dec.shape[1] == 2:
         p[:, 0] = 1 - p[:, 1]
 
-    norms = np.linalg.norm(dec, axis=1)
+    # scikit-learn normalizes the per-class values by their sum (Zadrozny & Elkan);
+    # rows whose values are all ~0 get a uniform distribution.
+    sums = p.sum(axis=1)
+    all_zero = sums < 1e-15
+    p[all_zero] = 1.0 / dec.shape[1]
+    sums[all_zero] = 1.0
 
-    # scikit-learn puts equal probas in this case
-    indexes = np.where(norms < 1e-15)
-    p[indexes] = np.ones(len(dec)) * (1 / len(dec))
-
-    return p / norms
+    return p / sums[:, None]
 
 
 POLICIES = {

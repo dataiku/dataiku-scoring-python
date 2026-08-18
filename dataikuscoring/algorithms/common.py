@@ -18,3 +18,18 @@ class Regressor:
     def predict(self, X):
         """Predict target vector from a 2D numpy array input X"""
         raise NotImplementedError
+
+
+class Clusterer:
+
+    def __init__(self, model_parameters):
+        """The content of the dss_pipeline_model.gz file"""
+        raise NotImplementedError
+
+    def predict(self, X):
+        """Predict the cluster index for each row of a 2D numpy array input X.
+
+        Anomaly-detection clusterers (e.g. Isolation Forest) additionally expose decision_function(X)
+        returning the per-row anomaly score.
+        """
+        raise NotImplementedError
