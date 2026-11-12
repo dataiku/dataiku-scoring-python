@@ -2,7 +2,7 @@
 
 import setuptools
 
-long_description = (open('README.md').read() + '\n\n' +
+long_description = (open('README').read() + '\n\n' +
                     open('HISTORY.txt').read())
 
 VERSION = "14.7.7"
@@ -12,7 +12,7 @@ setuptools.setup(
     version=VERSION,
     license="Apache Software License",
     packages=setuptools.find_packages(),
-    description="Dataiku ML Scoring Python library",
+    description="Python scoring for DSS exported models",
     long_description=long_description,
     author="Dataiku",
     author_email="support@dataiku.com",
@@ -26,6 +26,7 @@ setuptools.setup(
         'Operating System :: OS Independent'
     ],
     install_requires=[
-        "numpy"
+        "numpy",
+        "six>=1.17.0,<2",
     ]
 )
