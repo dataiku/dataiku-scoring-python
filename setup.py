@@ -12,7 +12,7 @@ setuptools.setup(
     version=VERSION,
     license="Apache Software License",
     packages=setuptools.find_packages(),
-    description="Python scoring for DSS exported models",
+    description="Dataiku ML Scoring Python library",
     long_description=long_description,
     author="Dataiku",
     author_email="support@dataiku.com",
