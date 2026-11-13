@@ -26,6 +26,7 @@ setuptools.setup(
         'Operating System :: OS Independent'
     ],
     install_requires=[
-        "numpy"
+        "numpy",
+        "six>=1.17.0,<2",
     ]
 )
